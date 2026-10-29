@@ -1,5 +1,3 @@
-import base64
-import hashlib
 import json
 import re
 import struct
@@ -10,6 +8,8 @@ from xml.etree import ElementTree
 
 ROOT = Path(__file__).resolve().parents[1]
 CANONICAL = "https://free.justsimpleapps.online/"
+RELEASES = "https://github.com/owaiskhan-ash/Automatic-wallpaper-changer/releases/latest"
+DOWNLOAD = f"{RELEASES}/download/AutoWall.apk"
 
 
 class PageParser(HTMLParser):
@@ -17,6 +17,7 @@ class PageParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.heading_one_count = 0
         self.images = []
+        self.links = []
         self.local_assets = []
         self.external_scripts = []
         self.inline_styles = 0
@@ -27,6 +28,8 @@ class PageParser(HTMLParser):
             self.heading_one_count += 1
         if tag == "img":
             self.images.append(attrs)
+        if tag == "a" and attrs.get("href"):
+            self.links.append(attrs["href"])
         if tag == "script" and attrs.get("src"):
             self.external_scripts.append(attrs["src"])
         if tag == "style" or ("style" in attrs):
@@ -76,31 +79,47 @@ class LandingPageTests(unittest.TestCase):
 
     def test_canonical_and_indexable_metadata(self):
         self.assertIn(f'<link rel="canonical" href="{CANONICAL}">', self.html)
-        self.assertRegex(self.html, r"<title>[^<]{25,70}</title>")
-        self.assertRegex(self.html, r'<meta name="description" content="[^"]{80,180}">')
-        self.assertIn('<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">', self.html)
-        self.assertEqual(self.parser.heading_one_count, 1, "Use exactly one descriptive H1")
+        self.assertRegex(self.html, r"<title>[^<]{15,70}</title>")
+        self.assertRegex(self.html, r'<meta name="description" content="[^"]{60,180}">')
+        self.assertIn(
+            '<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">',
+            self.html,
+        )
+        self.assertEqual(self.parser.heading_one_count, 1, "Use exactly one H1")
+
+    def test_headline_is_the_app_number_only(self):
+        headline = re.search(r"<h1[^>]*>(.*?)</h1>", self.html, flags=re.DOTALL).group(1)
+        headline_text = re.sub(r"<[^>]+>", "", headline).strip()
+        self.assertEqual(re.sub(r"\s+", " ", headline_text), "App 01")
+        self.assertEqual(self.parser.images, [], "The minimal page uses no raster imagery")
 
     def test_open_graph_and_twitter_share_assets_exist(self):
-        self.assertIn('property="og:url" content="https://free.justsimpleapps.online/"', self.html)
+        self.assertIn(f'property="og:url" content="{CANONICAL}"', self.html)
         self.assertIn('name="twitter:card" content="summary_large_image"', self.html)
         image = (ROOT / "assets/og-image.png").read_bytes()
         self.assertEqual(image[:8], b"\x89PNG\r\n\x1a\n")
         self.assertEqual(struct.unpack(">II", image[16:24]), (1200, 630))
-        self.assertEqual(self.parser.images, [
-            {"src": "/assets/brand-mark.svg", "alt": "", "width": "42", "height": "42"},
-            {"src": "/assets/brand-mark.svg", "alt": "", "width": "36", "height": "36"},
-        ])
+        icon = (ROOT / "assets/apple-touch-icon.png").read_bytes()
+        self.assertEqual(icon[:8], b"\x89PNG\r\n\x1a\n")
+        self.assertEqual(struct.unpack(">II", icon[16:24]), (180, 180))
 
-    def test_structured_data_matches_visible_faq_copy(self):
+    def test_download_button_targets_the_latest_release_apk(self):
+        self.assertIn(f'href="{DOWNLOAD}"', self.html)
+        self.assertIn(f'href="{RELEASES}"', self.html)
+        self.assertIn("Download", self.visible_text)
+        downloads = [href for href in self.parser.links if "/releases/" in href]
+        self.assertEqual(downloads, [DOWNLOAD, RELEASES])
+        self.assertIn('rel="noopener"', self.html)
+        self.assertIn('target="_blank"', self.html)
+
+    def test_structured_data_matches_the_published_app(self):
         graph = self.schema["@graph"]
         graph_types = {item["@type"] for item in graph}
-        self.assertTrue({"Organization", "WebSite", "WebPage", "FAQPage"}.issubset(graph_types))
-        faq = next(item for item in graph if item["@type"] == "FAQPage")
-        self.assertEqual(len(faq["mainEntity"]), 5)
-        for question in faq["mainEntity"]:
-            self.assertIn(question["name"], self.visible_text)
-            self.assertIn(question["acceptedAnswer"]["text"], self.visible_text)
+        self.assertTrue({"Organization", "WebSite", "WebPage", "SoftwareApplication"}.issubset(graph_types))
+        app = next(item for item in graph if item["@type"] == "SoftwareApplication")
+        self.assertEqual(app["downloadUrl"], DOWNLOAD)
+        self.assertEqual(app["installUrl"], RELEASES)
+        self.assertEqual(app["offers"]["price"], "0")
 
     def test_crawler_files_point_to_the_canonical_host(self):
         robots = (ROOT / "robots.txt").read_text(encoding="utf-8")
@@ -143,6 +162,14 @@ class LandingPageTests(unittest.TestCase):
             path = (ROOT / asset.lstrip("/")).resolve()
             self.assertTrue(path.is_relative_to(ROOT), f"Asset path escaped repo: {asset}")
             self.assertTrue(path.exists(), f"Missing local asset: {asset}")
+
+    def test_stylesheet_stays_thin_and_fluorescent(self):
+        css = (ROOT / "styles.css").read_text(encoding="utf-8")
+        self.assertIn("--fluoro: #ccff00", css)
+        self.assertIn("font-weight: 300", css)
+        self.assertIn("border: var(--hairline) solid var(--ink)", css)
+        self.assertNotIn("box-shadow", css)
+        self.assertNotIn("border-radius: 0.75rem", css)
 
     def test_404_is_noindex_and_returns_users_to_home(self):
         not_found = (ROOT / "404.html").read_text(encoding="utf-8")
