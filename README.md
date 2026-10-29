@@ -5,11 +5,11 @@ A minimal slideshow landing page that publishes free Android apps **one slide at
 - **01 AutoWall** ([AutoWall on GitHub](https://github.com/owaiskhan-ash/Automatic-wallpaper-changer)), a free automatic wallpaper changer for Android.
 - **02 Progress Tracker** ([Progress Tracker on GitHub](https://github.com/owaiskhan-ash/Progress-Tracker)), a free project progress tracker for Android with an on-device widget.
 
-Fluorescent background, hairline rules, thin type, and two outline buttons per slide: a **Download** button that always resolves to the newest APK on GitHub Releases, and a small square shortcut to the release page. The top bar walks the catalogue like slides, one app on screen at a time, and no JavaScript is required.
+Fluorescent background, hairline rules, thin type, and two outline buttons per slide: a **Download** button that always resolves to the newest APK on GitHub Releases, and a small square shortcut to the release page. The top bar walks the catalogue like slides, one app on screen at a time; on a phone a horizontal swipe moves to the next or previous app. The deck works with JavaScript disabled.
 
 ## Preview locally
 
-There is no build step and no JavaScript. From the repository root, run:
+There is no build step, and the only script is a local swipe enhancement. From the repository root, run:
 
 ```sh
 python3 -m http.server 8000
@@ -22,10 +22,20 @@ Then open `http://localhost:8000`.
 - The page is a deck of `<section class="slide">` blocks. Exactly one is visible at a time: the slide named by the URL fragment, or `01 AutoWall` when the URL has no fragment.
 - `01` and `02` tabs (plus the arrow keys in the top bar) switch slides by changing `#app-01` / `#app-02`, so each app has a shareable URL (`/#app-02`) and the page keeps working without JavaScript.
 - `FREE` sits in the top-right bar with no icon box on the page itself.
+- Swiping left on a phone opens the next app and swiping right returns to the previous one; at either end of the deck the slide resists the drag instead of moving. A swipe is just a nav tap underneath: it sets the same `#app-02` / `#app-01` fragment, so the arrows, the URL, and the active tab always agree, and the incoming slide enters from the side the finger pushed toward. Horizontal gestures on phones and tablets belong to the deck (`touch-action: pan-y`), vertical gestures still scroll, and `prefers-reduced-motion` swaps the slide animation for an instant change.
 - Each slide's `Download` button points at `https://github.com/<owner>/<repo>/releases/latest/download/<asset>`. Because the path uses the `latest` release alias, it keeps working when a newer release is published; it never needs editing.
 - The square `↗` button on each slide opens that app's release notes page.
 - A tiny caption under the buttons records the release each button currently resolves to. It is kept in sync automatically (see below).
 - The viewport opens with a short, reduced-motion-aware fade/rise; the hairline frame and rules stay static.
+
+## Mobile swipe
+
+`swipe.js` is a small progressive enhancement loaded with a `defer` attribute from the site's own origin:
+
+- It engages only in the mobile layout the CSS defines for swipes (viewport at or below `620px`, or a coarse pointer such as a finger) and only for pointer input, so desktop layouts and keyboard users are untouched.
+- A gesture must be mostly horizontal to count, and it commits on either a long enough drag or a quick flick. A committed swipe swallows the click it would otherwise make on the link under the finger, so a swipe never starts a download.
+- The slide follows the finger through a `--swipe-x` custom property written with the CSSOM, which the strict Content Security Policy (`script-src 'self'`, `style-src-attr 'none'`) permits.
+- With JavaScript blocked or the file missing, the arrows, the `01` / `02` tabs, and the fragments still move between slides.
 
 ## Keeping the downloads on the latest release
 

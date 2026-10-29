@@ -123,6 +123,43 @@ class LandingPageTests(unittest.TestCase):
         self.assertIn(":has(.slide:target)", css)
         self.assertIn(".deck:not(:has(.slide:target)) .slide:first-of-type", css)
 
+    def test_mobile_swipe_moves_between_apps(self):
+        self.assertIn('<script src="/swipe.js" defer></script>', self.html)
+        self.assertIn('<p class="swipe-status" role="status" aria-live="polite"></p>', self.html)
+
+        js = (ROOT / "swipe.js").read_text(encoding="utf-8")
+        for event in ("pointerdown", "pointermove", "pointerup", "pointercancel"):
+            self.assertIn(f'addEventListener("{event}"', js, f"swipe.js must listen for {event}")
+        # The gesture only runs in the mobile layout, using the exact same query as the CSS.
+        query = "(max-width: 620px), (hover: none) and (pointer: coarse)"
+        self.assertIn(f'var MOBILE_QUERY = "{query}"', js)
+        self.assertIn(f"@media {query}", (ROOT / "styles.css").read_text(encoding="utf-8"))
+        self.assertIn("matchMedia(MOBILE_QUERY)", js)
+        # A swipe is just a nav tap: the #app-0x fragment still owns visibility, so the
+        # arrows, the address bar, and the no-JavaScript deck all stay in agreement.
+        self.assertIn('window.location.hash = "#" + incoming.id', js)
+        # A committed swipe must not also open the download link under the finger.
+        self.assertIn('addEventListener("click", onClickCapture, true)', js)
+
+        css = (ROOT / "styles.css").read_text(encoding="utf-8")
+        self.assertIn("touch-action: pan-y", css)
+        self.assertIn(".slide.is-swiping", css)
+        self.assertIn("var(--swipe-x, 0px)", css)
+        self.assertIn("@keyframes swipe-from-next", css)
+        self.assertIn("@keyframes swipe-from-prev", css)
+        self.assertIn("@media (prefers-reduced-motion: reduce)", css)
+
+    def test_swipe_script_keeps_the_strict_style_sources(self):
+        js = (ROOT / "swipe.js").read_text(encoding="utf-8")
+        # CSP sets style-src-attr 'none', which blocks style attributes and cssText but
+        # allows CSSOM property writes.
+        self.assertNotIn('setAttribute("style"', js)
+        self.assertNotIn("setAttribute('style'", js)
+        self.assertNotIn("cssText", js)
+        self.assertIn('style.setProperty("--swipe-x"', js)
+        self.assertNotIn("innerHTML", js)
+        self.assertNotIn("eval(", js)
+
     def test_no_em_dashes_in_site_copy_or_metadata(self):
         for rel in ("index.html", "404.html", "llms.txt", "README.md", "site.webmanifest"):
             content = (ROOT / rel).read_text(encoding="utf-8")
@@ -236,7 +273,11 @@ class LandingPageTests(unittest.TestCase):
         self.assertIn("strict-origin-when-cross-origin", policies["referrer-policy"])
 
     def test_static_assets_resolve_and_no_inline_or_external_runtime_code(self):
-        self.assertEqual(self.parser.external_scripts, [], "The page should not depend on runtime scripts")
+        self.assertEqual(
+            self.parser.external_scripts,
+            ["/swipe.js"],
+            "The only script is the local, same-origin swipe enhancement",
+        )
         self.assertEqual(self.parser.inline_styles, 0, "Styles must remain in the CSP-approved stylesheet")
         for asset in self.parser.local_assets:
             path = (ROOT / asset.lstrip("/")).resolve()
