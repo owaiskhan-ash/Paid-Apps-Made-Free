@@ -2,7 +2,7 @@ name: Sync latest release
 
 on:
   schedule:
-    # Daily at 06:17 UTC — picks up new AutoWall releases without any manual edit.
+    # Daily at 06:17 UTC: picks up new AutoWall releases without any manual edit.
     - cron: "17 6 * * *"
   workflow_dispatch:
   repository_dispatch:

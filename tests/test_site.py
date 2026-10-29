@@ -91,21 +91,45 @@ class LandingPageTests(unittest.TestCase):
         )
         self.assertEqual(self.parser.heading_one_count, 1, "Use exactly one H1")
 
-    def test_headline_is_the_app_number_only(self):
+    def test_headline_is_number_and_app_name_with_no_landing_images(self):
         headline = re.search(r"<h1[^>]*>(.*?)</h1>", self.html, flags=re.DOTALL).group(1)
         headline_text = re.sub(r"<[^>]+>", "", headline).strip()
-        self.assertEqual(re.sub(r"\s+", " ", headline_text), "App 01")
+        self.assertEqual(re.sub(r"\s+", " ", headline_text), "01 AutoWall")
         self.assertEqual(self.parser.images, [], "The minimal page uses no raster imagery")
 
-    def test_open_graph_and_twitter_share_assets_exist(self):
+    def test_top_bar_shows_free_on_right_without_box(self):
+        top_bar = re.search(r'<header class="bar bar-top">(.*?)</header>', self.html, flags=re.DOTALL).group(1)
+        self.assertNotIn('class="mark"', top_bar)
+        self.assertEqual(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", top_bar)).strip(), "FREE")
+        css = (ROOT / "styles.css").read_text(encoding="utf-8")
+        bar_top_block = re.search(r"\.bar-top\s*\{([^}]*)\}", css, flags=re.DOTALL).group(1)
+        self.assertIn("justify-content: flex-end", bar_top_block)
+
+    def test_no_em_dashes_in_site_copy_or_metadata(self):
+        for rel in ("index.html", "404.html", "llms.txt", "README.md"):
+            content = (ROOT / rel).read_text(encoding="utf-8")
+            self.assertNotIn("\u2014", content, f"Found em dash in {rel}")
+            self.assertNotIn("&mdash;", content, f"Found &mdash; in {rel}")
+            self.assertNotIn("&#8212;", content, f"Found &#8212; in {rel}")
+
+    def test_open_graph_and_favicon_assets_exist(self):
         self.assertIn(f'property="og:url" content="{CANONICAL}"', self.html)
+        self.assertIn('property="og:title" content="01 AutoWall"', self.html)
         self.assertIn('name="twitter:card" content="summary_large_image"', self.html)
+        self.assertIn('name="twitter:title" content="01 AutoWall"', self.html)
         image = (ROOT / "assets/og-image.png").read_bytes()
         self.assertEqual(image[:8], b"\x89PNG\r\n\x1a\n")
         self.assertEqual(struct.unpack(">II", image[16:24]), (1200, 630))
         icon = (ROOT / "assets/apple-touch-icon.png").read_bytes()
         self.assertEqual(icon[:8], b"\x89PNG\r\n\x1a\n")
         self.assertEqual(struct.unpack(">II", icon[16:24]), (180, 180))
+        fav32 = (ROOT / "assets/favicon-32x32.png").read_bytes()
+        self.assertEqual(fav32[:8], b"\x89PNG\r\n\x1a\n")
+        self.assertEqual(struct.unpack(">II", fav32[16:24]), (32, 32))
+        app_icon = (ROOT / "assets/free-app-icon.png").read_bytes()
+        self.assertEqual(app_icon[:8], b"\x89PNG\r\n\x1a\n")
+        self.assertIn('href="/assets/free-app-icon.png"', self.html)
+        self.assertTrue((ROOT / "favicon.ico").exists())
 
     def test_download_button_targets_the_latest_release_apk(self):
         self.assertIn(f'href="{DOWNLOAD}"', self.html)
@@ -180,6 +204,7 @@ class LandingPageTests(unittest.TestCase):
         self.assertIn('<meta name="robots" content="noindex, nofollow">', not_found)
         self.assertIn('href="/"', not_found)
         self.assertIn("Page not found", not_found)
+        self.assertNotIn('class="mark"', not_found)
 
 
 class ReleaseSyncTests(unittest.TestCase):
