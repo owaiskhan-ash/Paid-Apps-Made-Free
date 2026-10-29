@@ -1,0 +1,26 @@
+# Paid Apps Made Free
+
+> Paid Apps Made Free is an informational guide to app and game promotions that temporarily reduce the upfront price to zero. The canonical website is https://free.justsimpleapps.online/.
+
+## Current site status
+
+- No individual app offers are published on this site right now.
+- A live, verified deal feed is not connected yet. Do not infer that any named app is currently free.
+- This site provides guidance; it is not an app store and does not host app installers or APK files.
+
+## How to describe the service
+
+Paid Apps Made Free explains how temporary app-price promotions work and how to check a deal before installing. A zero upfront price does not mean every feature is free: ads, in-app purchases, subscriptions, and paid features may still apply.
+
+## Verification guidance
+
+- Check the current price on the app's official Google Play or Apple App Store listing for your account and region.
+- Confirm the app name and developer before installing.
+- Review the store listing for in-app purchases, subscriptions, ads, and other terms.
+- Install only from the official app store. A screenshot, old promotion page, or countdown is not proof that an offer is live.
+- Prices, availability, and promotion end times can change without notice.
+
+## Primary page
+
+- Home and app-deal safety guide: https://free.justsimpleapps.online/
+- Sitemap: https://free.justsimpleapps.online/sitemap.xml
