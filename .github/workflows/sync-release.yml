@@ -1,8 +1,8 @@
-name: Sync latest release
+name: Sync latest releases
 
 on:
   schedule:
-    # Daily at 06:17 UTC: picks up new AutoWall releases without any manual edit.
+    # Daily at 06:17 UTC: picks up new releases for every app without any manual edit.
     - cron: "17 6 * * *"
   workflow_dispatch:
   repository_dispatch:
@@ -28,7 +28,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Point the download button at the newest release
+      - name: Point every download button at the newest release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 tools/sync_release.py
@@ -40,15 +40,15 @@ jobs:
           python3 tools/sync_release.py --check
           python3 -m unittest discover -s tests -v
 
-      - name: Commit the refreshed version label
+      - name: Commit the refreshed version labels
         run: |
           if git diff --quiet -- index.html; then
-            echo "Already on the latest release."
+            echo "Already on the latest releases."
             exit 0
           fi
-          version="$(python3 tools/sync_release.py --offline | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag"])')"
+          versions="$(python3 tools/sync_release.py --offline | python3 -c 'import json,sys; print(", ".join("%s %s %s" % (a["num"], a["name"], a["tag"]) for a in json.load(sys.stdin)["apps"]))')"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html
-          git commit -m "Point the download button at the latest release (${version})"
+          git commit -m "Point the download buttons at the latest releases (${versions})"
           git push

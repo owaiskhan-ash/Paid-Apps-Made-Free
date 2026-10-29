@@ -68,7 +68,7 @@ a:focus-visible {
 .stage {
   position: relative;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr;
   min-height: 100vh;
   min-height: 100dvh;
   padding: clamp(0.9rem, 2.4vw, 1.6rem) clamp(1rem, 4vw, 2.75rem);
@@ -132,7 +132,7 @@ a:focus-visible {
 }
 
 .bar-top {
-  justify-content: flex-end;
+  justify-content: space-between;
   padding-bottom: clamp(0.9rem, 2vw, 1.35rem);
   border-bottom: var(--hairline) solid var(--line);
 }
@@ -147,12 +147,109 @@ a:focus-visible {
   white-space: nowrap;
 }
 
+/* ---------- slideshow nav ---------- */
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Every nav control shares one box so the arrows and tabs line up exactly. */
+.nav-arrow,
+.nav-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 1.35rem;
+  line-height: 1;
+  border: var(--hairline) solid transparent;
+  font-size: 0.6rem;
+  font-weight: 300;
+  letter-spacing: 0.2em;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.nav-arrow {
+  width: 1.55rem;
+  padding: 0;
+  border-color: var(--ink);
+  font-size: 0.72rem;
+  letter-spacing: 0;
+}
+
+.nav-dot {
+  padding: 0 0.42rem;
+}
+
+.nav-dot:hover,
+.nav-dot:focus-visible {
+  border-color: var(--ink);
+}
+
+.nav-sep {
+  opacity: 0.4;
+}
+
+.nav-arrow:hover,
+.nav-arrow:focus-visible {
+  background: var(--ink);
+  color: var(--fluoro);
+}
+
+/* Highlight the slide currently on screen. */
+.stage:not(:has(.slide:target)) .nav-dot[href="#app-01"],
+.stage:has(#app-01:target) .nav-dot[href="#app-01"],
+.stage:has(#app-02:target) .nav-dot[href="#app-02"] {
+  background: var(--ink);
+  color: var(--fluoro);
+}
+
+/* Hide the arrows that would leave the deck. */
+.stage:not(:has(.slide:target)) .nav-arrow[href="#app-01"],
+.stage:has(#app-01:target) .nav-arrow[href="#app-01"],
+.stage:has(#app-02:target) .nav-arrow[href="#app-02"] {
+  display: none;
+}
+
+/* ---------- deck ---------- */
+
+.deck {
+  position: relative;
+  display: grid;
+  min-height: 0;
+}
+
+/* One slide at a time: the targeted slide is shown, or the first slide when
+   the URL has no target (the default landing view). */
+.slide {
+  display: none;
+  grid-template-rows: 1fr auto;
+  min-height: 0;
+}
+
+.slide:target,
+.deck:not(:has(.slide:target)) .slide:first-of-type {
+  display: grid;
+}
+
+/* Browsers without :has() fall back to a stacked deck so content is never hidden. */
+@supports not (selector(:has(*))) {
+  .slide {
+    display: grid;
+  }
+}
+
 /* ---------- core ---------- */
 
 .core {
   position: relative;
   z-index: 1;
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -249,10 +346,38 @@ a:focus-visible {
   from {
     opacity: 0;
     transform: translateY(0.7rem);
+    filter: blur(2px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes buttons-in {
+  from {
+    opacity: 0;
+    transform: translateY(1rem);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.7rem);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
   }
 }
 
@@ -261,18 +386,24 @@ a:focus-visible {
 }
 
 .app-code,
-.actions,
 .caption,
 .bar {
   animation: rise 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
+/* The download and shortcut buttons slide in just after the headline. */
 .actions {
-  animation-delay: 90ms;
+  animation: buttons-in 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: 140ms;
 }
 
 .caption {
-  animation-delay: 160ms;
+  animation-delay: 240ms;
+}
+
+/* A slide re-runs its entrance when it becomes the target. */
+.slide:target {
+  animation: slide-in 600ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -280,7 +411,8 @@ a:focus-visible {
   .app-code,
   .actions,
   .caption,
-  .bar {
+  .bar,
+  .slide:target {
     animation: none;
   }
 }

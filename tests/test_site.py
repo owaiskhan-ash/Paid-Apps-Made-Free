@@ -11,9 +11,16 @@ from xml.etree import ElementTree
 
 ROOT = Path(__file__).resolve().parents[1]
 CANONICAL = "https://free.justsimpleapps.online/"
-RELEASES = "https://github.com/owaiskhan-ash/Automatic-wallpaper-changer/releases/latest"
-ASSET = "AutoWall.apk"
-DOWNLOAD = f"{RELEASES}/download/{ASSET}"
+
+# 01 AutoWall
+RELEASES_01 = "https://github.com/owaiskhan-ash/Automatic-wallpaper-changer/releases/latest"
+ASSET_01 = "AutoWall.apk"
+DOWNLOAD_01 = f"{RELEASES_01}/download/{ASSET_01}"
+
+# 02 Progress Tracker
+RELEASES_02 = "https://github.com/owaiskhan-ash/Progress-Tracker/releases/latest"
+ASSET_02 = "Project-Tracker.apk"
+DOWNLOAD_02 = f"{RELEASES_02}/download/{ASSET_02}"
 
 
 class PageParser(HTMLParser):
@@ -89,34 +96,45 @@ class LandingPageTests(unittest.TestCase):
             '<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">',
             self.html,
         )
-        self.assertEqual(self.parser.heading_one_count, 1, "Use exactly one H1")
+        self.assertEqual(self.parser.heading_one_count, 2, "One H1 per app slide")
 
-    def test_headline_is_number_and_app_name_with_no_landing_images(self):
-        headline = re.search(r"<h1[^>]*>(.*?)</h1>", self.html, flags=re.DOTALL).group(1)
-        headline_text = re.sub(r"<[^>]+>", "", headline).strip()
-        self.assertEqual(re.sub(r"\s+", " ", headline_text), "01 AutoWall")
-        self.assertEqual(self.parser.images, [], "The minimal page uses no raster imagery")
+    def test_slides_are_numbered_and_show_one_app_each(self):
+        headlines = re.findall(r"<h1[^>]*>(.*?)</h1>", self.html, flags=re.DOTALL)
+        texts = [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", text)).strip() for text in headlines]
+        self.assertEqual(texts, ["01 AutoWall", "02 Progress Tracker"])
 
-    def test_top_bar_shows_free_on_right_without_box(self):
+        slide_ids = re.findall(r'<section class="slide[^"]*" id="(app-\d+)"', self.html)
+        self.assertEqual(slide_ids, ["app-01", "app-02"])
+        self.assertEqual(self.parser.images, [], "The minimal slides use no raster imagery")
+
+    def test_top_bar_shows_navigation_and_free_on_right_without_box(self):
         top_bar = re.search(r'<header class="bar bar-top">(.*?)</header>', self.html, flags=re.DOTALL).group(1)
         self.assertNotIn('class="mark"', top_bar)
-        self.assertEqual(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", top_bar)).strip(), "FREE")
+        self.assertIn("nav", top_bar)
+        self.assertIn("FREE", re.sub(r"<[^>]+>", " ", top_bar))
         css = (ROOT / "styles.css").read_text(encoding="utf-8")
         bar_top_block = re.search(r"\.bar-top\s*\{([^}]*)\}", css, flags=re.DOTALL).group(1)
-        self.assertIn("justify-content: flex-end", bar_top_block)
+        self.assertIn("justify-content: space-between", bar_top_block)
+
+    def test_slideshow_keeps_one_slide_visible_at_a_time(self):
+        css = (ROOT / "styles.css").read_text(encoding="utf-8")
+        self.assertRegex(css, r"\.slide\s*\{[^}]*display:\s*none", "Slides start hidden")
+        self.assertIn(".slide:target", css)
+        self.assertIn(":has(.slide:target)", css)
+        self.assertIn(".deck:not(:has(.slide:target)) .slide:first-of-type", css)
 
     def test_no_em_dashes_in_site_copy_or_metadata(self):
         for rel in ("index.html", "404.html", "llms.txt", "README.md", "site.webmanifest"):
             content = (ROOT / rel).read_text(encoding="utf-8")
-            self.assertNotIn("\u2014", content, f"Found em dash in {rel}")
+            self.assertNotIn("—", content, f"Found em dash in {rel}")
             self.assertNotIn("&mdash;", content, f"Found &mdash; in {rel}")
             self.assertNotIn("&#8212;", content, f"Found &#8212; in {rel}")
 
     def test_open_graph_google_vercel_and_manifest_icons_exist(self):
         self.assertIn(f'property="og:url" content="{CANONICAL}"', self.html)
-        self.assertIn('property="og:title" content="01 AutoWall"', self.html)
+        self.assertIn('property="og:title" content="Paid Apps Made Free"', self.html)
         self.assertIn('name="twitter:card" content="summary_large_image"', self.html)
-        self.assertIn('name="twitter:title" content="01 AutoWall"', self.html)
+        self.assertIn('name="twitter:title" content="Paid Apps Made Free"', self.html)
 
         image = (ROOT / "assets/og-image.png").read_bytes()
         self.assertEqual(image[:8], b"\x89PNG\r\n\x1a\n")
@@ -156,26 +174,31 @@ class LandingPageTests(unittest.TestCase):
         for src in manifest_srcs:
             self.assertTrue((ROOT / src.lstrip("/")).exists(), f"Missing manifest icon: {src}")
 
-    def test_download_button_targets_the_latest_release_apk(self):
-        self.assertIn(f'href="{DOWNLOAD}"', self.html)
-        self.assertIn(f'href="{RELEASES}"', self.html)
+    def test_download_buttons_target_the_latest_release_apk_for_every_app(self):
+        for download, releases in ((DOWNLOAD_01, RELEASES_01), (DOWNLOAD_02, RELEASES_02)):
+            self.assertIn(f'href="{download}"', self.html)
+            self.assertIn(f'href="{releases}"', self.html)
         self.assertIn("Download", self.visible_text)
         downloads = [href for href in self.parser.links if "/releases/" in href]
-        self.assertEqual(downloads, [DOWNLOAD, RELEASES])
+        self.assertEqual(downloads, [DOWNLOAD_01, RELEASES_01, DOWNLOAD_02, RELEASES_02])
         self.assertIn('rel="noopener"', self.html)
         self.assertIn('target="_blank"', self.html)
 
-    def test_structured_data_matches_the_published_app_and_organization_logo(self):
+    def test_structured_data_covers_the_organization_and_both_apps(self):
         graph = self.schema["@graph"]
         graph_types = {item["@type"] for item in graph}
         self.assertTrue({"Organization", "WebSite", "WebPage", "SoftwareApplication"}.issubset(graph_types))
+
         org = next(item for item in graph if item["@type"] == "Organization")
         self.assertEqual(org["logo"]["url"], f"{CANONICAL}assets/icon-512x512.png")
-        app = next(item for item in graph if item["@type"] == "SoftwareApplication")
-        self.assertEqual(app["downloadUrl"], DOWNLOAD)
-        self.assertEqual(app["installUrl"], RELEASES)
-        self.assertEqual(app["offers"]["price"], "0")
-        self.assertEqual(app["image"], f"{CANONICAL}assets/icon-512x512.png")
+
+        apps = [item for item in graph if item["@type"] == "SoftwareApplication"]
+        self.assertEqual(len(apps), 2, "One SoftwareApplication entry per app")
+        for app, download, releases in ((apps[0], DOWNLOAD_01, RELEASES_01), (apps[1], DOWNLOAD_02, RELEASES_02)):
+            self.assertEqual(app["downloadUrl"], download)
+            self.assertEqual(app["installUrl"], releases)
+            self.assertEqual(app["offers"]["price"], "0")
+            self.assertEqual(app["image"], f"{CANONICAL}assets/icon-512x512.png")
 
     def test_crawler_files_point_to_the_canonical_host(self):
         robots = (ROOT / "robots.txt").read_text(encoding="utf-8")
@@ -237,7 +260,7 @@ class LandingPageTests(unittest.TestCase):
 
 
 class ReleaseSyncTests(unittest.TestCase):
-    """The download button must always resolve to whichever release is newest."""
+    """Every download button must resolve to whichever release is newest."""
 
     @classmethod
     def setUpClass(cls):
@@ -245,6 +268,8 @@ class ReleaseSyncTests(unittest.TestCase):
         cls.sync = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.sync)
         cls.html = (ROOT / "index.html").read_text(encoding="utf-8")
+        cls.autowall = cls.sync.APPS[0]
+        cls.progress = cls.sync.APPS[1]
 
     @staticmethod
     def release(tag, *names):
@@ -253,51 +278,71 @@ class ReleaseSyncTests(unittest.TestCase):
             "assets": [{"name": name, "size": 1024, "browser_download_url": "https://x/" + name} for name in names],
         }
 
-    def test_button_is_pinned_to_the_mutable_latest_alias(self):
-        pinned = self.sync.current_pins(self.html)
-        self.assertTrue(
-            pinned["download"].startswith(RELEASES + "/download/"),
-            "The download button must use /releases/latest/download/, never a versioned URL",
-        )
-        self.assertNotRegex(pinned["download"], r"/download/v?\d")
-        self.assertRegex(pinned["tag"], r"^v\d+\.\d+")
+    def test_every_button_is_pinned_to_the_mutable_latest_alias(self):
+        pinned = {entry["num"]: entry for entry in self.sync.current_pins(self.html)["apps"]}
+        for app, base in ((self.autowall, RELEASES_01), (self.progress, RELEASES_02)):
+            self.assertTrue(
+                pinned[app["num"]]["download"].startswith(base + "/download/"),
+                "The download button must use /releases/latest/download/, never a versioned URL",
+            )
+            self.assertNotRegex(pinned[app["num"]]["download"], r"/download/v?\d")
+            self.assertRegex(pinned[app["num"]]["tag"], r"^v\d+\.\d+")
 
     def test_prefers_the_stable_asset_name_over_tag_stamped_or_debug_builds(self):
-        chosen = self.sync.choose_apk(self.release("v9.9.9", "AutoWall-debug.apk", "AutoWall-9.9.9.apk", "AutoWall.apk"))
+        chosen = self.sync.choose_apk(
+            self.release("v9.9.9", "AutoWall-debug.apk", "AutoWall-9.9.9.apk", "AutoWall.apk"),
+            self.autowall["preferred"],
+        )
         self.assertEqual(chosen["name"], "AutoWall.apk")
+        chosen = self.sync.choose_apk(
+            self.release("v9.9.9", "Project-Tracker-debug.apk", "Project-Tracker-9.9.9.apk", "Project-Tracker.apk"),
+            self.progress["preferred"],
+        )
+        self.assertEqual(chosen["name"], "Project-Tracker.apk")
 
     def test_falls_back_when_the_asset_name_changes(self):
         self.assertEqual(
-            self.sync.choose_apk(self.release("v2.0.0", "AutoWall-2.0.0.apk", "checksums.txt"))["name"],
+            self.sync.choose_apk(self.release("v2.0.0", "AutoWall-2.0.0.apk", "checksums.txt"), self.autowall["preferred"])["name"],
             "AutoWall-2.0.0.apk",
         )
         self.assertEqual(
-            self.sync.choose_apk(self.release("v2.0.1", "AutoWall-debug.apk"))["name"],
+            self.sync.choose_apk(self.release("v2.0.1", "AutoWall-debug.apk"), self.autowall["preferred"])["name"],
             "AutoWall-debug.apk",
         )
         with self.assertRaises(self.sync.ReleaseError):
-            self.sync.choose_apk(self.release("v2.0.2", "notes.md"))
+            self.sync.choose_apk(self.release("v2.0.2", "notes.md"), self.autowall["preferred"])
 
     def test_rewrite_moves_every_reference_to_the_new_release(self):
-        latest = self.sync.describe(self.release("v7.0.0", "AutoWall-7.0.0.apk", "AutoWall.apk"))
-        self.assertEqual(latest["download"], DOWNLOAD)
+        latest = self.sync.describe(self.autowall, self.release("v7.0.0", "AutoWall-7.0.0.apk", "AutoWall.apk"))
+        self.assertEqual(latest["download"], DOWNLOAD_01)
 
-        rewritten = self.sync.rewrite(self.html, latest)
-        self.assertIn('href="' + DOWNLOAD + '"', rewritten)
-        self.assertIn('"downloadUrl": "' + DOWNLOAD + '"', rewritten)
-        self.assertIn('"installUrl": "' + RELEASES + '"', rewritten)
+        rewritten = self.sync.rewrite(self.html, self.autowall, latest)
+        self.assertIn('href="' + DOWNLOAD_01 + '"', rewritten)
+        self.assertIn('"downloadUrl": "' + DOWNLOAD_01 + '"', rewritten)
+        self.assertIn('"installUrl": "' + RELEASES_01 + '"', rewritten)
         self.assertIn("v7.0.0", rewritten)
-        self.assertNotIn("v1.2.0", rewritten)
-        self.assertEqual(self.sync.rewrite(rewritten, latest), rewritten, "rewrite should be idempotent")
+        self.assertNotIn("v1.3.0", rewritten)
+        self.assertEqual(self.sync.rewrite(rewritten, self.autowall, latest), rewritten, "rewrite should be idempotent")
+
+    def test_rewrite_updates_the_second_app_in_place(self):
+        latest = self.sync.describe(self.progress, self.release("v2.2.2", "Project-Tracker.apk"))
+        rewritten = self.sync.rewrite(self.html, self.progress, latest)
+        self.assertIn('href="' + DOWNLOAD_02 + '"', rewritten)
+        self.assertIn('"downloadUrl": "' + DOWNLOAD_02 + '"', rewritten)
+        self.assertIn('"installUrl": "' + RELEASES_02 + '"', rewritten)
+        self.assertIn("v2.2.2", rewritten)
+        self.assertNotIn("v1.1.5", rewritten)
+        # The first app's slide is untouched.
+        self.assertIn("v1.3.0", rewritten)
 
     def test_asset_rename_is_carried_into_the_page(self):
-        latest = self.sync.describe(self.release("v8.0.0", "AutoWall-v8.apk"))
-        rewritten = self.sync.rewrite(self.html, latest)
-        self.assertIn(RELEASES + "/download/AutoWall-v8.apk", rewritten)
+        latest = self.sync.describe(self.autowall, self.release("v8.0.0", "AutoWall-v8.apk"))
+        rewritten = self.sync.rewrite(self.html, self.autowall, latest)
+        self.assertIn(RELEASES_01 + "/download/AutoWall-v8.apk", rewritten)
 
     def test_a_release_without_an_apk_fails_loudly_instead_of_shipping_a_stale_pin(self):
         with self.assertRaises(self.sync.ReleaseError):
-            self.sync.describe({"tag_name": "v3.0.0", "assets": []})
+            self.sync.describe(self.autowall, {"tag_name": "v3.0.0", "assets": []})
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(self.sync.main(["--offline"]), 0)
 
@@ -307,6 +352,7 @@ class ReleaseSyncTests(unittest.TestCase):
         self.assertIn("--check", workflow)
         self.assertIn("schedule:", workflow)
         self.assertIn("contents: write", workflow)
+        self.assertIn('["apps"]', workflow)
 
 
 if __name__ == "__main__":
