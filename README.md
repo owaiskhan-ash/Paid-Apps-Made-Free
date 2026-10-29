@@ -1,6 +1,6 @@
 # Paid Apps Made Free
 
-A one-screen, minimal landing page for **App 01** — [AutoWall](https://github.com/owaiskhan-ash/Automatic-wallpaper-changer), a free automatic wallpaper changer for Android.
+A one-screen, minimal landing page for **01 AutoWall** ([AutoWall on GitHub](https://github.com/owaiskhan-ash/Automatic-wallpaper-changer)), a free automatic wallpaper changer for Android.
 
 Fluorescent background, hairline rules, thin type, and two outline buttons: a **Download** button that always resolves to the newest APK on GitHub Releases, and a small square shortcut to the release page.
 
@@ -16,8 +16,9 @@ Then open `http://localhost:8000`.
 
 ## Page anatomy
 
-- `App 01` is the only headline on the page — no body copy, no navigation.
-- `Download` → `https://github.com/owaiskhan-ash/Automatic-wallpaper-changer/releases/latest/download/AutoWall.apk`
+- `01 AutoWall` is the only headline on the page, with no body copy and no navigation.
+- `FREE` sits in the top-right bar with no icon box on the landing page itself.
+- `Download` points to `https://github.com/owaiskhan-ash/Automatic-wallpaper-changer/releases/latest/download/AutoWall.apk`.
   Because the path uses the `latest` release alias, it keeps working when a newer release is published; it never needs editing.
 - The square `↗` button opens the release notes page.
 - A tiny caption under the buttons records the release the button currently resolves to. It is kept in sync automatically (see below).
@@ -30,7 +31,7 @@ Two independent safeguards:
 1. **The link is versionless by construction.** It points at GitHub's
    `/releases/latest/download/<asset>` alias, which redirects to whatever release is
    newest at click time. There is no tag or version number in the URL, so a new
-   release is picked up instantly — no deploy needed.
+   release is picked up instantly with no deploy needed.
 2. **A scheduled sync keeps the visible bits honest.** `tools/sync_release.py` reads
    the GitHub release API, picks the installable APK (stable name first, never a
    debug build unless it is the only option), and rewrites the download href, the
@@ -65,15 +66,18 @@ Set `GITHUB_TOKEN` for unattended runs to avoid the anonymous API rate limit.
 ## Quality checks
 
 Standard-library SEO, structured-data, CSP, asset, release-link, and
-release-sync checks (18 tests, no network needed):
+release-sync checks (no network needed):
 
 ```sh
 python3 -m unittest discover -s tests -v
 ```
 
-## Regenerating images
+## Brand icons and social share card
 
-`assets/og-image.png` (1200×630) and `assets/apple-touch-icon.png` (180×180) are drawn by a dependency-free rasteriser, so they can be regenerated without ImageMagick, a browser, or fonts:
+- `assets/free-app-icon.png` (1280×1280) is the high-resolution fluorescent debossed `FREE` icon saved in the repository and used as the site favicon (`assets/favicon-32x32.png`, `favicon.ico`, and `assets/apple-touch-icon.png`).
+- `assets/og-image.png` (1200×630) is the Open Graph / X social share card for `01 AutoWall`.
+
+To refresh derived favicon sizes from `assets/free-app-icon.png` (requires ImageMagick `convert`):
 
 ```sh
 python3 tools/make_assets.py

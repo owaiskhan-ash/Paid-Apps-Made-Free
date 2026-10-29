@@ -5,8 +5,8 @@ GitHub's ``/releases/latest/download/<asset>`` alias already redirects to the
 newest published release, so the button never downloads an old build. Two
 things can still drift, though, and this script fixes both:
 
-1. the *asset file name* — if a release renames the APK, the alias 404s;
-2. the visible version caption — it says whatever was current when the page
+1. the *asset file name*: if a release renames the APK, the alias 404s;
+2. the visible version caption: it says whatever was current when the page
    was last edited.
 
 It reads the GitHub release API, picks the installable APK, then rewrites

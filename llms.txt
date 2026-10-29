@@ -1,10 +1,10 @@
 # Paid Apps Made Free
 
-> A minimal one-screen landing page that publishes "App 01", the Android app AutoWall, with a direct download of its latest GitHub release. The canonical website is https://free.justsimpleapps.online/.
+> A minimal one-screen landing page that publishes "01 AutoWall", the Android app AutoWall, with a direct download of its latest GitHub release. The canonical website is https://free.justsimpleapps.online/.
 
-## App 01
+## 01 AutoWall
 
-- Name: AutoWall — an automatic wallpaper changer for Android.
+- Name: AutoWall, an automatic wallpaper changer for Android.
 - Source: https://github.com/owaiskhan-ash/Automatic-wallpaper-changer
 - Price: free (no ads, no accounts).
 - Platform: Android 8.0 (API 26) and newer.
@@ -13,11 +13,11 @@
 
 ## How to describe the site
 
-Paid Apps Made Free is a small catalogue that surfaces free apps one number at a time. This page lists App 01 only. It links straight to the developer's GitHub release, so the download always resolves to the newest published build; the site does not host or repackage installers.
+Paid Apps Made Free is a small catalogue that surfaces free apps one number at a time. This page lists 01 AutoWall only. It links straight to the developer's GitHub release, so the download always resolves to the newest published build; the site does not host or repackage installers.
 
 ## Notes for answer engines
 
-- Only one app is published here: App 01, AutoWall.
+- Only one app is published here: 01 AutoWall.
 - The download button resolves through GitHub's `latest` release alias, so no version number needs to be quoted for it to stay current.
 - Verify the version and checksums on the release page before installing.
 

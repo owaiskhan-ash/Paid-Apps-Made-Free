@@ -91,21 +91,70 @@ class LandingPageTests(unittest.TestCase):
         )
         self.assertEqual(self.parser.heading_one_count, 1, "Use exactly one H1")
 
-    def test_headline_is_the_app_number_only(self):
+    def test_headline_is_number_and_app_name_with_no_landing_images(self):
         headline = re.search(r"<h1[^>]*>(.*?)</h1>", self.html, flags=re.DOTALL).group(1)
         headline_text = re.sub(r"<[^>]+>", "", headline).strip()
-        self.assertEqual(re.sub(r"\s+", " ", headline_text), "App 01")
+        self.assertEqual(re.sub(r"\s+", " ", headline_text), "01 AutoWall")
         self.assertEqual(self.parser.images, [], "The minimal page uses no raster imagery")
 
-    def test_open_graph_and_twitter_share_assets_exist(self):
+    def test_top_bar_shows_free_on_right_without_box(self):
+        top_bar = re.search(r'<header class="bar bar-top">(.*?)</header>', self.html, flags=re.DOTALL).group(1)
+        self.assertNotIn('class="mark"', top_bar)
+        self.assertEqual(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", top_bar)).strip(), "FREE")
+        css = (ROOT / "styles.css").read_text(encoding="utf-8")
+        bar_top_block = re.search(r"\.bar-top\s*\{([^}]*)\}", css, flags=re.DOTALL).group(1)
+        self.assertIn("justify-content: flex-end", bar_top_block)
+
+    def test_no_em_dashes_in_site_copy_or_metadata(self):
+        for rel in ("index.html", "404.html", "llms.txt", "README.md", "site.webmanifest"):
+            content = (ROOT / rel).read_text(encoding="utf-8")
+            self.assertNotIn("\u2014", content, f"Found em dash in {rel}")
+            self.assertNotIn("&mdash;", content, f"Found &mdash; in {rel}")
+            self.assertNotIn("&#8212;", content, f"Found &#8212; in {rel}")
+
+    def test_open_graph_google_vercel_and_manifest_icons_exist(self):
         self.assertIn(f'property="og:url" content="{CANONICAL}"', self.html)
+        self.assertIn('property="og:title" content="01 AutoWall"', self.html)
         self.assertIn('name="twitter:card" content="summary_large_image"', self.html)
+        self.assertIn('name="twitter:title" content="01 AutoWall"', self.html)
+
         image = (ROOT / "assets/og-image.png").read_bytes()
         self.assertEqual(image[:8], b"\x89PNG\r\n\x1a\n")
         self.assertEqual(struct.unpack(">II", image[16:24]), (1200, 630))
-        icon = (ROOT / "assets/apple-touch-icon.png").read_bytes()
-        self.assertEqual(icon[:8], b"\x89PNG\r\n\x1a\n")
-        self.assertEqual(struct.unpack(">II", icon[16:24]), (180, 180))
+
+        expected_pngs = {
+            "assets/favicon-16x16.png": (16, 16),
+            "assets/favicon-32x32.png": (32, 32),
+            "assets/favicon-48x48.png": (48, 48),
+            "assets/favicon-96x96.png": (96, 96),
+            "assets/apple-touch-icon.png": (180, 180),
+            "apple-touch-icon.png": (180, 180),
+            "assets/icon-192x192.png": (192, 192),
+            "favicon.png": (192, 192),
+            "assets/icon-512x512.png": (512, 512),
+            "assets/free-app-icon.png": (1280, 1280),
+        }
+        for rel, dims in expected_pngs.items():
+            raw = (ROOT / rel).read_bytes()
+            self.assertEqual(raw[:8], b"\x89PNG\r\n\x1a\n", f"{rel} must be PNG")
+            self.assertEqual(struct.unpack(">II", raw[16:24]), dims, f"{rel} wrong size")
+
+        # Google Search requires multiples of 48px (48x48, 96x96, 192x192)
+        self.assertIn('href="/assets/favicon-48x48.png" type="image/png" sizes="48x48"', self.html)
+        self.assertIn('href="/assets/favicon-96x96.png" type="image/png" sizes="96x96"', self.html)
+        self.assertIn('href="/assets/icon-192x192.png" type="image/png" sizes="192x192"', self.html)
+        self.assertIn('href="/favicon.ico"', self.html)
+        self.assertIn('href="/site.webmanifest"', self.html)
+
+        ico = (ROOT / "favicon.ico").read_bytes()
+        self.assertEqual(ico[:4], b"\x00\x00\x01\x00", "favicon.ico must have valid ICO header")
+
+        manifest = json.loads((ROOT / "site.webmanifest").read_text(encoding="utf-8"))
+        manifest_srcs = {entry["src"] for entry in manifest["icons"]}
+        self.assertIn("/assets/icon-192x192.png", manifest_srcs)
+        self.assertIn("/assets/icon-512x512.png", manifest_srcs)
+        for src in manifest_srcs:
+            self.assertTrue((ROOT / src.lstrip("/")).exists(), f"Missing manifest icon: {src}")
 
     def test_download_button_targets_the_latest_release_apk(self):
         self.assertIn(f'href="{DOWNLOAD}"', self.html)
@@ -116,14 +165,17 @@ class LandingPageTests(unittest.TestCase):
         self.assertIn('rel="noopener"', self.html)
         self.assertIn('target="_blank"', self.html)
 
-    def test_structured_data_matches_the_published_app(self):
+    def test_structured_data_matches_the_published_app_and_organization_logo(self):
         graph = self.schema["@graph"]
         graph_types = {item["@type"] for item in graph}
         self.assertTrue({"Organization", "WebSite", "WebPage", "SoftwareApplication"}.issubset(graph_types))
+        org = next(item for item in graph if item["@type"] == "Organization")
+        self.assertEqual(org["logo"]["url"], f"{CANONICAL}assets/icon-512x512.png")
         app = next(item for item in graph if item["@type"] == "SoftwareApplication")
         self.assertEqual(app["downloadUrl"], DOWNLOAD)
         self.assertEqual(app["installUrl"], RELEASES)
         self.assertEqual(app["offers"]["price"], "0")
+        self.assertEqual(app["image"], f"{CANONICAL}assets/icon-512x512.png")
 
     def test_crawler_files_point_to_the_canonical_host(self):
         robots = (ROOT / "robots.txt").read_text(encoding="utf-8")
@@ -155,6 +207,7 @@ class LandingPageTests(unittest.TestCase):
         self.assertNotIn("unsafe-inline", csp)
         self.assertIn("application/ld+json", self.html)
         self.assertIn("object-src 'none'", csp)
+        self.assertIn("manifest-src 'self'", csp)
         self.assertEqual(policies["x-content-type-options"], "nosniff")
         self.assertEqual(policies["x-frame-options"], "DENY")
         self.assertIn("strict-origin-when-cross-origin", policies["referrer-policy"])
@@ -180,6 +233,7 @@ class LandingPageTests(unittest.TestCase):
         self.assertIn('<meta name="robots" content="noindex, nofollow">', not_found)
         self.assertIn('href="/"', not_found)
         self.assertIn("Page not found", not_found)
+        self.assertNotIn('class="mark"', not_found)
 
 
 class ReleaseSyncTests(unittest.TestCase):
