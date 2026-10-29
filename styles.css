@@ -7,8 +7,6 @@
   --line: rgba(11, 11, 11, 0.28);
   --line-soft: rgba(11, 11, 11, 0.15);
   --hairline: 1px;
-  --travel: 1.5rem;
-  --travel-lines: 2.6rem;
   font-family: "Helvetica Neue", Helvetica, Arial, ui-sans-serif, system-ui, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -19,15 +17,14 @@
 }
 
 html {
-  height: 100%;
   background: var(--fluoro);
 }
 
 body {
   min-width: 320px;
-  height: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
-  overflow: hidden;
   background: var(--fluoro);
   color: var(--ink);
   font-size: 0.75rem;
@@ -43,7 +40,7 @@ a {
 
 .skip-link {
   position: fixed;
-  z-index: 40;
+  z-index: 20;
   top: 0.75rem;
   left: 0.75rem;
   padding: 0.55rem 0.9rem;
@@ -61,45 +58,24 @@ a {
   transform: translateY(0);
 }
 
-a:focus-visible,
-button:focus-visible {
+a:focus-visible {
   outline: var(--hairline) dashed var(--ink);
   outline-offset: 5px;
 }
 
-/* ---------- deck ---------- */
+/* ---------- stage ---------- */
 
-.deck {
+.stage {
   position: relative;
-  height: 100vh;
-  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: clamp(0.9rem, 2.4vw, 1.6rem) clamp(1rem, 4vw, 2.75rem);
   overflow: hidden;
 }
 
-.screen {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  padding: clamp(0.9rem, 2.4vw, 1.6rem) clamp(1rem, 4vw, 2.75rem);
-  z-index: 1;
-}
-
-.screen.is-parked {
-  visibility: hidden;
-}
-
-.screen.is-leaving {
-  z-index: 2;
-}
-
-.screen.is-entering {
-  z-index: 3;
-}
-
-/* ---------- hairlines ---------- */
-
-.lines {
+.hairlines {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -174,49 +150,6 @@ button:focus-visible {
   width: 0.62rem;
   height: 0.62rem;
   border: var(--hairline) solid var(--ink);
-}
-
-/* ---------- next / back ---------- */
-
-.nav {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.15rem 0;
-  border: 0;
-  background: none;
-  color: var(--ink);
-  font: inherit;
-  font-size: 0.6rem;
-  font-weight: 300;
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: opacity 160ms ease;
-}
-
-.nav-arrow {
-  width: 0.42rem;
-  height: 0.7rem;
-  overflow: visible;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transition: transform 220ms ease;
-}
-
-.nav:hover {
-  opacity: 0.6;
-}
-
-.nav:hover .nav-arrow {
-  transform: translateX(0.18rem);
-}
-
-.nav:hover .nav-arrow-back {
-  transform: translateX(-0.18rem);
 }
 
 /* ---------- core ---------- */
@@ -306,210 +239,54 @@ button:focus-visible {
   text-transform: uppercase;
 }
 
-/* ---------- slide choreography ----------
-   Out: text first, then the hairlines.
-   In: hairlines first, then the text.                                     */
+/* ---------- entrance ---------- */
 
-@keyframes out-left {
+@keyframes frame-in {
+  from {
+    opacity: 0;
+  }
   to {
-    opacity: 0;
-    transform: translateX(calc(var(--travel) * -1));
+    opacity: 1;
   }
 }
 
-@keyframes out-right {
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.7rem);
+  }
   to {
-    opacity: 0;
-    transform: translateX(var(--travel));
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-@keyframes lines-out-left {
-  to {
-    opacity: 0;
-    transform: translateX(calc(var(--travel-lines) * -1));
-  }
+.hairlines {
+  animation: frame-in 900ms ease both;
 }
 
-@keyframes lines-out-right {
-  to {
-    opacity: 0;
-    transform: translateX(var(--travel-lines));
-  }
+.app-code,
+.actions,
+.caption,
+.bar {
+  animation: rise 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
-@keyframes in-right {
-  from {
-    opacity: 0;
-    transform: translateX(var(--travel));
-  }
+.actions {
+  animation-delay: 90ms;
 }
 
-@keyframes in-left {
-  from {
-    opacity: 0;
-    transform: translateX(calc(var(--travel) * -1));
-  }
-}
-
-@keyframes lines-in-right {
-  from {
-    opacity: 0;
-    transform: translateX(var(--travel-lines));
-  }
-}
-
-@keyframes lines-in-left {
-  from {
-    opacity: 0;
-    transform: translateX(calc(var(--travel-lines) * -1));
-  }
-}
-
-.deck[data-dir="forward"] {
-  --out-text: out-left;
-  --out-lines: lines-out-left;
-  --in-text: in-right;
-  --in-lines: lines-in-right;
-}
-
-.deck[data-dir="back"] {
-  --out-text: out-right;
-  --out-lines: lines-out-right;
-  --in-text: in-left;
-  --in-lines: lines-in-left;
-}
-
-/* leaving screen — text steps out, then the hairlines follow */
-
-.screen.is-leaving .layer-text {
-  animation: var(--out-text) 260ms cubic-bezier(0.4, 0, 0.7, 0.45) both;
-}
-
-.screen.is-leaving .bar-top {
-  animation-delay: 20ms;
-}
-
-.screen.is-leaving .core > .layer-text:nth-child(1) {
-  animation-delay: 0ms;
-}
-
-.screen.is-leaving .core > .layer-text:nth-child(2) {
-  animation-delay: 55ms;
-}
-
-.screen.is-leaving .core > .layer-text:nth-child(3) {
-  animation-delay: 110ms;
-}
-
-.screen.is-leaving .bar-bottom {
-  animation-delay: 70ms;
-}
-
-.screen.is-leaving .lines {
-  animation: var(--out-lines) 320ms cubic-bezier(0.4, 0, 0.7, 0.45) 320ms both;
-}
-
-/* arriving screen — hairlines first, then the text */
-
-.screen.is-entering .lines {
-  animation: var(--in-lines) 430ms cubic-bezier(0.22, 0.75, 0.25, 1) 250ms both;
-}
-
-.screen.is-entering .layer-text {
-  animation: var(--in-text) 380ms cubic-bezier(0.22, 0.75, 0.25, 1) both;
-}
-
-.screen.is-entering .core > .layer-text:nth-child(1) {
-  animation-delay: 640ms;
-}
-
-.screen.is-entering .core > .layer-text:nth-child(2) {
-  animation-delay: 690ms;
-}
-
-.screen.is-entering .core > .layer-text:nth-child(3) {
-  animation-delay: 740ms;
-}
-
-.screen.is-entering .bar-top {
-  animation-delay: 620ms;
-}
-
-.screen.is-entering .bar-bottom {
-  animation-delay: 790ms;
-}
-
-/* first load — a quiet fade up, once */
-
-@keyframes boot {
-  from {
-    opacity: 0;
-    transform: translateY(0.6rem);
-  }
-}
-
-.screen.is-booting .lines {
-  animation: boot 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-
-.screen.is-booting .layer-text {
-  animation: boot 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-
-.screen.is-booting .core > .layer-text:nth-child(1) {
-  animation-delay: 60ms;
-}
-
-.screen.is-booting .core > .layer-text:nth-child(2) {
-  animation-delay: 130ms;
-}
-
-.screen.is-booting .core > .layer-text:nth-child(3) {
-  animation-delay: 200ms;
+.caption {
+  animation-delay: 160ms;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .screen.is-leaving .layer-text,
-  .screen.is-leaving .lines,
-  .screen.is-entering .layer-text,
-  .screen.is-entering .lines,
-  .screen.is-booting .layer-text,
-  .screen.is-booting .lines {
-    animation-duration: 1ms;
-    animation-delay: 0ms;
-  }
-
-  .nav-arrow {
-    transition: none;
-  }
-}
-
-/* ---------- no scripting: both screens stack and the page scrolls ---------- */
-
-@media (scripting: none) {
-  body {
-    overflow: auto;
-  }
-
-  .deck {
-    height: auto;
-    min-height: 100%;
-    overflow: visible;
-  }
-
-  .screen {
-    position: static;
-    min-height: 100vh;
-    min-height: 100dvh;
-  }
-
-  .screen.is-parked {
-    visibility: visible;
-  }
-
-  .nav {
-    display: none;
+  .hairlines,
+  .app-code,
+  .actions,
+  .caption,
+  .bar {
+    animation: none;
   }
 }
 
@@ -528,10 +305,6 @@ button:focus-visible {
   }
 
   .bar {
-    letter-spacing: 0.22em;
-  }
-
-  .nav {
     letter-spacing: 0.22em;
   }
 }
