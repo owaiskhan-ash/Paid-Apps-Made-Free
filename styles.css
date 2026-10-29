@@ -152,11 +152,18 @@ a:focus-visible {
 .nav {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.5rem;
 }
 
+/* Every nav control shares one box so the arrows and tabs line up exactly. */
+.nav-arrow,
 .nav-dot {
-  padding: 0.15rem 0.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 1.35rem;
+  line-height: 1;
   border: var(--hairline) solid transparent;
   font-size: 0.6rem;
   font-weight: 300;
@@ -166,6 +173,18 @@ a:focus-visible {
   transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
 }
 
+.nav-arrow {
+  width: 1.55rem;
+  padding: 0;
+  border-color: var(--ink);
+  font-size: 0.72rem;
+  letter-spacing: 0;
+}
+
+.nav-dot {
+  padding: 0 0.42rem;
+}
+
 .nav-dot:hover,
 .nav-dot:focus-visible {
   border-color: var(--ink);
@@ -173,16 +192,6 @@ a:focus-visible {
 
 .nav-sep {
   opacity: 0.4;
-}
-
-.nav-arrow {
-  width: 1.7rem;
-  padding: 0.25rem 0;
-  border: var(--hairline) solid var(--ink);
-  font-size: 0.72rem;
-  letter-spacing: 0;
-  text-decoration: none;
-  transition: background-color 160ms ease, color 160ms ease;
 }
 
 .nav-arrow:hover,
@@ -337,10 +346,12 @@ a:focus-visible {
   from {
     opacity: 0;
     transform: translateY(0.7rem);
+    filter: blur(2px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
+    filter: blur(0);
   }
 }
 
@@ -348,10 +359,12 @@ a:focus-visible {
   from {
     opacity: 0;
     transform: translateY(0.7rem);
+    filter: blur(2px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
+    filter: blur(0);
   }
 }
 
