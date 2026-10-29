@@ -5,8 +5,10 @@ import json
 import re
 import struct
 import unittest
+import urllib.error
 from html.parser import HTMLParser
 from pathlib import Path
+from unittest import mock
 from xml.etree import ElementTree
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -406,10 +408,89 @@ class ReleaseSyncTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(self.sync.main(["--offline"]), 0)
 
+    @staticmethod
+    def alias_hops(latest, download_location, install_location):
+        """Pretend GitHub answers both aliases with these redirect targets."""
+        hops = {
+            latest["download"]: (302, download_location),
+            latest["install"]: (302, install_location),
+        }
+        return mock.patch.object(
+            ReleaseSyncTests.sync, "first_hop", side_effect=lambda url, timeout=20.0: hops[url]
+        )
+
+    def test_verify_accepts_an_alias_that_reaches_the_pinned_release(self):
+        base = "https://github.com/owaiskhan-ash/Progress-Tracker"
+        latest = self.sync.describe(self.progress, self.release("v2.2.2", "Project-Tracker.apk"))
+        with self.alias_hops(
+            latest,
+            f"{base}/releases/download/v2.2.2/Project-Tracker.apk",
+            f"{base}/releases/tag/v2.2.2",
+        ):
+            self.sync.verify_latest_alias(self.progress, latest)
+
+    def test_verify_accepts_relative_and_percent_encoded_redirects(self):
+        latest = self.sync.describe(self.autowall, self.release("v4.1.0", "AutoWall 4.1.apk"))
+        with self.alias_hops(
+            latest,
+            "/owaiskhan-ash/Automatic-wallpaper-changer/releases/download/v4.1.0/AutoWall%204.1.apk",
+            "/owaiskhan-ash/Automatic-wallpaper-changer/releases/tag/v4.1.0",
+        ):
+            self.sync.verify_latest_alias(self.autowall, latest)
+
+    def test_verify_accepts_an_alias_answered_in_place(self):
+        latest = self.sync.describe(self.progress, self.release("v2.2.2", "Project-Tracker.apk"))
+        with mock.patch.object(self.sync, "first_hop", return_value=(200, None)):
+            self.sync.verify_latest_alias(self.progress, latest)
+
+    def test_verify_rejects_an_alias_that_serves_an_older_tag(self):
+        base = "https://github.com/owaiskhan-ash/Progress-Tracker"
+        latest = self.sync.describe(self.progress, self.release("v2.2.2", "Project-Tracker.apk"))
+        with self.alias_hops(
+            latest,
+            f"{base}/releases/download/v2.2.1/Project-Tracker.apk",
+            f"{base}/releases/tag/v2.2.2",
+        ):
+            with self.assertRaises(self.sync.ReleaseError):
+                self.sync.verify_latest_alias(self.progress, latest)
+        with self.alias_hops(
+            latest,
+            f"{base}/releases/download/v2.2.2/Project-Tracker.apk",
+            f"{base}/releases/tag/v2.2.1",
+        ):
+            with self.assertRaises(self.sync.ReleaseError):
+                self.sync.verify_latest_alias(self.progress, latest)
+
+    def test_verify_rejects_an_alias_that_lost_the_asset_name(self):
+        base = "https://github.com/owaiskhan-ash/Progress-Tracker"
+        latest = self.sync.describe(self.progress, self.release("v2.2.2", "Project-Tracker.apk"))
+        with self.alias_hops(
+            latest,
+            f"{base}/releases/download/v2.2.2/Project-Tracker-2.2.2.apk",
+            f"{base}/releases/tag/v2.2.2",
+        ):
+            with self.assertRaises(self.sync.ReleaseError):
+                self.sync.verify_latest_alias(self.progress, latest)
+
+    def test_first_hop_reads_a_redirect_without_following_it(self):
+        location = "https://github.com/owaiskhan-ash/Progress-Tracker/releases/tag/v2.2.2"
+        opener = mock.Mock()
+        opener.open.side_effect = urllib.error.HTTPError(
+            "https://x", 302, "Found", {"Location": location}, None
+        )
+        with mock.patch.object(self.sync.urllib.request, "build_opener", return_value=opener):
+            self.assertEqual(self.sync.first_hop("https://x"), (302, location))
+
+        opener.open.side_effect = urllib.error.HTTPError("https://x", 404, "Not Found", {}, None)
+        with mock.patch.object(self.sync.urllib.request, "build_opener", return_value=opener):
+            with self.assertRaises(self.sync.ReleaseError):
+                self.sync.first_hop("https://x")
+
     def test_workflow_keeps_the_page_in_sync(self):
         workflow = (ROOT / ".github/workflows/sync-release.yml").read_text(encoding="utf-8")
         self.assertIn("tools/sync_release.py", workflow)
         self.assertIn("--check", workflow)
+        self.assertIn("--verify", workflow, "CI must prove the latest aliases resolve before committing")
         self.assertIn("schedule:", workflow)
         self.assertIn("contents: write", workflow)
         self.assertIn('["apps"]', workflow)

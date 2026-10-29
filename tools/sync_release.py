@@ -14,10 +14,15 @@ It reads each app's GitHub release API, picks the installable APK, then
 rewrites the slide (download button, release-notes button, caption) and the
 JSON-LD entry so everything names the same, currently-latest release.
 
+``--verify`` also asks GitHub where each button's ``latest`` alias actually
+lands and fails unless it reaches the release the API just reported, so a
+button that resolves to an older tag or a renamed asset cannot ship quietly.
+
 Usage, from the repository root:
 
     python3 tools/sync_release.py           # update index.html
     python3 tools/sync_release.py --check    # exit 1 if any slide is out of date
+    python3 tools/sync_release.py --verify   # also prove the latest aliases resolve
     python3 tools/sync_release.py --offline  # report the pinned values only
 
 Set ``GITHUB_TOKEN`` when running in CI to avoid the anonymous rate limit.
@@ -34,6 +39,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+from urllib.parse import unquote, urljoin, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGE = ROOT / "index.html"
@@ -105,6 +111,58 @@ def choose_apk(release: dict, preferred: tuple[str, ...]) -> dict:
         if "debug" not in asset["name"].lower():
             return asset
     return assets[0]
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Leave 3xx responses unfollowed so the alias target stays inspectable."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D401 - stdlib shape
+        return None
+
+
+def first_hop(url: str, timeout: float = 20.0) -> tuple[int, str | None]:
+    """Return the status and redirect target of ``url`` without following it."""
+    request = urllib.request.Request(url, method="HEAD")
+    request.add_header("User-Agent", "paid-apps-made-free-sync")
+    opener = urllib.request.build_opener(_NoRedirect)
+    try:
+        with opener.open(request, timeout=timeout) as response:
+            return response.status, response.headers.get("Location")
+    except urllib.error.HTTPError as error:
+        if 300 <= error.code < 400:
+            return error.code, error.headers.get("Location")
+        raise ReleaseError(f"{url} returned HTTP {error.code}") from error
+    except (urllib.error.URLError, TimeoutError) as error:  # pragma: no cover - network path
+        raise ReleaseError(f"Could not reach {url}: {error}") from error
+
+
+def verify_latest_alias(app: dict, latest: dict, timeout: float = 20.0) -> None:
+    """Prove GitHub's ``latest`` aliases really reach the release we pinned.
+
+    The API says which release is newest, but only the live alias proves the
+    buttons in the page follow it there. A release that renames the APK, or a
+    button that still resolves to an older tag, fails here instead of shipping.
+    """
+    owner, repo = app["owner"], app["repo"]
+    expected_download = f"/{owner}/{repo}/releases/download/{latest['tag']}/{latest['asset']}"
+    expected_install = f"/{owner}/{repo}/releases/tag/{latest['tag']}"
+
+    for label, url, expected in (
+        ("download", latest["download"], expected_download),
+        ("release page", latest["install"], expected_install),
+    ):
+        status, location = first_hop(url, timeout)
+        if location is None:
+            if 200 <= status < 300:
+                # GitHub answered in place, so the alias itself is authoritative.
+                continue
+            raise ReleaseError(f"{app['num']} {app['name']}: {label} alias {url} returned HTTP {status}")
+        landed = unquote(urlsplit(urljoin(url, location)).path)
+        if landed != expected:
+            raise ReleaseError(
+                f"{app['num']} {app['name']}: {label} button resolves to {landed}, "
+                f"not {expected}"
+            )
 
 
 def describe(app: dict, release: dict) -> dict:
@@ -198,6 +256,7 @@ def rewrite(html: str, app: dict, latest: dict) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--check", action="store_true", help="exit 1 when any slide is out of date")
+    parser.add_argument("--verify", action="store_true", help="prove the live latest aliases reach the pinned releases")
     parser.add_argument("--offline", action="store_true", help="print the pinned values and stop")
     args = parser.parse_args(argv)
 
@@ -220,6 +279,16 @@ def main(argv: list[str] | None = None) -> int:
         megabytes = (latest["size"] or 0) / (1024 * 1024)
         print(f"{app['num']} {app['name']}: {latest['tag']} · {latest['asset']} ({megabytes:.1f} MB)")
         print(f"  download → {latest['download']}")
+
+    if args.verify:
+        for app in APPS:
+            latest = latests[app["num"]]
+            try:
+                verify_latest_alias(app, latest)
+            except ReleaseError as error:
+                print(f"sync-release: {error}", file=sys.stderr)
+                return 2
+            print(f"{app['num']} {app['name']}: latest alias resolves to {latest['tag']}")
 
     updated = html
     for app in APPS:
