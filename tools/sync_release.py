@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
-"""Keep the download button pointed at the newest AutoWall release.
+"""Keep every app's download button pointed at its newest release.
 
-GitHub's ``/releases/latest/download/<asset>`` alias already redirects to the
-newest published release, so the button never downloads an old build. Two
-things can still drift, though, and this script fixes both:
+Each app in the catalogue is a slide on ``index.html``. GitHub's
+``/releases/latest/download/<asset>`` alias already redirects to the newest
+published release, so a button never downloads an old build. Two things can
+still drift, though, and this script fixes both for every app:
 
 1. the *asset file name*: if a release renames the APK, the alias 404s;
-2. the visible version caption: it says whatever was current when the page
-   was last edited.
+2. the visible version caption: it says whatever was current when the page was
+   last edited.
 
-It reads the GitHub release API, picks the installable APK, then rewrites
-``index.html`` (download button, release-notes button, JSON-LD, caption) so
-everything names the same, currently-latest release.
+It reads each app's GitHub release API, picks the installable APK, then
+rewrites the slide (download button, release-notes button, caption) and the
+JSON-LD entry so everything names the same, currently-latest release.
 
 Usage, from the repository root:
 
     python3 tools/sync_release.py           # update index.html
-    python3 tools/sync_release.py --check    # exit 1 if it is out of date
+    python3 tools/sync_release.py --check    # exit 1 if any slide is out of date
     python3 tools/sync_release.py --offline  # report the pinned values only
 
 Set ``GITHUB_TOKEN`` when running in CI to avoid the anonymous rate limit.
@@ -37,22 +38,46 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PAGE = ROOT / "index.html"
 
-OWNER = "owaiskhan-ash"
-REPO = "Automatic-wallpaper-changer"
-API = f"https://api.github.com/repos/{OWNER}/{REPO}/releases/latest"
-BASE = f"https://github.com/{OWNER}/{REPO}"
-
-# Preference order: the stable release-signed name first, then any build that
-# is not a debug one.
-PREFERRED_ASSETS = ("AutoWall.apk",)
+# The catalogue, in slide order. Add a third app here and the sync picks it up.
+APPS = (
+    {
+        "num": "01",
+        "name": "AutoWall",
+        "id": "app-01",
+        "owner": "owaiskhan-ash",
+        "repo": "Automatic-wallpaper-changer",
+        # Stable release-signed name first, then anything that is not a debug build.
+        "preferred": ("AutoWall.apk",),
+        "operating_system": "Android 8.0+",
+        "application_category": "UtilitiesApplication",
+    },
+    {
+        "num": "02",
+        "name": "Progress Tracker",
+        "id": "app-02",
+        "owner": "owaiskhan-ash",
+        "repo": "Progress-Tracker",
+        "preferred": ("Project-Tracker.apk",),
+        "operating_system": "Android",
+        "application_category": "ProductivityApplication",
+    },
+)
 
 
 class ReleaseError(RuntimeError):
     pass
 
 
-def fetch_latest_release(timeout: float = 20.0) -> dict:
-    request = urllib.request.Request(API, headers={"Accept": "application/vnd.github+json"})
+def app_base(app: dict) -> str:
+    return f"https://github.com/{app['owner']}/{app['repo']}"
+
+
+def app_api(app: dict) -> str:
+    return f"https://api.github.com/repos/{app['owner']}/{app['repo']}/releases/latest"
+
+
+def fetch_latest_release(app: dict, timeout: float = 20.0) -> dict:
+    request = urllib.request.Request(app_api(app), headers={"Accept": "application/vnd.github+json"})
     request.add_header("User-Agent", "paid-apps-made-free-sync")
     token = os.environ.get("GITHUB_TOKEN")
     if token:
@@ -61,18 +86,18 @@ def fetch_latest_release(timeout: float = 20.0) -> dict:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as error:  # pragma: no cover - network path
-        raise ReleaseError(f"GitHub API returned {error.code} for {API}") from error
+        raise ReleaseError(f"GitHub API returned {error.code} for {app_api(app)}") from error
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:  # pragma: no cover
-        raise ReleaseError(f"Could not read {API}: {error}") from error
+        raise ReleaseError(f"Could not read {app_api(app)}: {error}") from error
 
 
-def choose_apk(release: dict) -> dict:
+def choose_apk(release: dict, preferred: tuple[str, ...]) -> dict:
     assets = [asset for asset in release.get("assets", []) if asset["name"].lower().endswith(".apk")]
     if not assets:
         raise ReleaseError(f"Release {release.get('tag_name')} has no .apk asset")
 
     by_name = {asset["name"]: asset for asset in assets}
-    for candidate in PREFERRED_ASSETS:
+    for candidate in preferred:
         if candidate in by_name:
             return by_name[candidate]
 
@@ -82,105 +107,129 @@ def choose_apk(release: dict) -> dict:
     return assets[0]
 
 
-def describe(release: dict) -> dict:
-    asset = choose_apk(release)
+def describe(app: dict, release: dict) -> dict:
+    asset = choose_apk(release, app["preferred"])
     tag = (release.get("tag_name") or "").strip()
     if not tag:
         raise ReleaseError("Latest release has no tag name")
+    base = app_base(app)
     return {
+        "app": app,
         "tag": tag,
         "asset": asset["name"],
         "size": asset.get("size"),
-        "download": f"{BASE}/releases/latest/download/{asset['name']}",
-        "install": f"{BASE}/releases/latest",
+        "download": f"{base}/releases/latest/download/{asset['name']}",
+        "install": f"{base}/releases/latest",
     }
 
 
-def current_pins(html: str) -> dict:
-    download = re.search(r'class="btn btn-primary" href="([^"]+)"', html)
-    caption = re.search(r'<p class="caption">.*?</span>\s*(v[^<\s]+)\s*<', html, flags=re.DOTALL)
-    return {
-        "download": download.group(1) if download else None,
-        "tag": caption.group(1) if caption else None,
-    }
-
-
-def rewrite(html: str, latest: dict) -> str:
-    download = latest["download"]
-    install = latest["install"]
-    tag = latest["tag"]
-
-    url_base = re.escape(BASE)
-
-    # JSON-LD first: it holds the same two URLs in a different shape.
-    html = re.sub(
-        r'("downloadUrl":\s*")' + url_base + r'/releases/[^"]*(")',
-        lambda match: f"{match.group(1)}{download}{match.group(2)}",
-        html,
-    )
-    html = re.sub(
-        r'("installUrl":\s*")' + url_base + r'/releases/[^"]*(")',
-        lambda match: f"{match.group(1)}{install}{match.group(2)}",
-        html,
-    )
-
-    # The download button: always the `latest` alias so it can never serve an
-    # older build, with the asset name taken from the newest release.
-    html, download_hits = re.subn(
-        r'(class="btn btn-primary" href=")' + url_base + r'/releases/[^"]*(")',
-        lambda match: f"{match.group(1)}{download}{match.group(2)}",
-        html,
-    )
-    html, install_hits = re.subn(
-        r'(class="btn btn-square" href=")' + url_base + r'/releases/[^"]*(")',
-        lambda match: f"{match.group(1)}{install}{match.group(2)}",
-        html,
-    )
-    html, caption_hits = re.subn(
-        r'(<p class="caption">.*?</span>\s*)v[^<\s]+(\s*<)',
-        lambda match: f"{match.group(1)}{tag}{match.group(2)}",
+def slide_match(html: str, app_id: str):
+    return re.search(
+        r'(<section[^>]*id="%s"[^>]*>)(.*?)(</section>)' % re.escape(app_id),
         html,
         flags=re.DOTALL,
     )
 
+
+def current_pins(html: str) -> dict:
+    apps = []
+    for app in APPS:
+        match = slide_match(html, app["id"])
+        download = tag = None
+        if match:
+            block = match.group(0)
+            found = re.search(r'class="btn btn-primary" href="([^"]+)"', block)
+            caption = re.search(r'<p class="caption">.*?</span>\s*(v[^<\s]+)\s*<', block, flags=re.DOTALL)
+            download = found.group(1) if found else None
+            tag = caption.group(1) if caption else None
+        apps.append({"num": app["num"], "name": app["name"], "tag": tag, "download": download})
+    return {"apps": apps}
+
+
+def rewrite(html: str, app: dict, latest: dict) -> str:
+    match = slide_match(html, app["id"])
+    if not match:
+        raise ReleaseError(f"index.html has no slide for {app['num']} {app['name']}")
+
+    head, body, tail = match.group(1), match.group(2), match.group(3)
+    esc = re.escape(app_base(app))
+
+    # The download button: always the `latest` alias so it can never serve an
+    # older build, with the asset name taken from the newest release.
+    body, download_hits = re.subn(
+        r'(class="btn btn-primary" href=")' + esc + r'/releases/[^"]*(")',
+        lambda m: f'{m.group(1)}{latest["download"]}{m.group(2)}',
+        body,
+    )
+    body, install_hits = re.subn(
+        r'(class="btn btn-square" href=")' + esc + r'/releases/[^"]*(")',
+        lambda m: f'{m.group(1)}{latest["install"]}{m.group(2)}',
+        body,
+    )
+    body, caption_hits = re.subn(
+        r'(<p class="caption">.*?</span>\s*)v[^<\s]+(\s*<)',
+        lambda m: f'{m.group(1)}{latest["tag"]}{m.group(2)}',
+        body,
+        flags=re.DOTALL,
+    )
     if not (download_hits and install_hits and caption_hits):
         raise ReleaseError(
-            "index.html no longer matches the expected download button / caption markup "
+            f"slide for {app['num']} {app['name']} no longer matches the expected "
+            f"download button / caption markup "
             f"(button={download_hits}, notes={install_hits}, caption={caption_hits})"
         )
+
+    html = html[: match.start()] + head + body + tail + html[match.end():]
+
+    # Structured data carries the same two URLs in a different shape.
+    html = re.sub(
+        r'("downloadUrl":\s*")' + esc + r'/releases/[^"]*(")',
+        lambda m: f'{m.group(1)}{latest["download"]}{m.group(2)}',
+        html,
+    )
+    html = re.sub(
+        r'("installUrl":\s*")' + esc + r'/releases/[^"]*(")',
+        lambda m: f'{m.group(1)}{latest["install"]}{m.group(2)}',
+        html,
+    )
     return html
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--check", action="store_true", help="exit 1 when index.html is out of date")
+    parser.add_argument("--check", action="store_true", help="exit 1 when any slide is out of date")
     parser.add_argument("--offline", action="store_true", help="print the pinned values and stop")
     args = parser.parse_args(argv)
 
     html = PAGE.read_text(encoding="utf-8")
     pinned = current_pins(html)
+    pinned_by_num = {entry["num"]: entry for entry in pinned["apps"]}
 
     if args.offline:
         print(json.dumps(pinned, indent=2))
         return 0
 
-    try:
-        latest = describe(fetch_latest_release())
-    except ReleaseError as error:
-        print(f"sync-release: {error}", file=sys.stderr)
-        return 2
+    latests: dict[str, dict] = {}
+    for app in APPS:
+        try:
+            latests[app["num"]] = describe(app, fetch_latest_release(app))
+        except ReleaseError as error:
+            print(f"sync-release: {error}", file=sys.stderr)
+            return 2
+        latest = latests[app["num"]]
+        megabytes = (latest["size"] or 0) / (1024 * 1024)
+        print(f"{app['num']} {app['name']}: {latest['tag']} · {latest['asset']} ({megabytes:.1f} MB)")
+        print(f"  download → {latest['download']}")
 
-    megabytes = (latest["size"] or 0) / (1024 * 1024)
-    print(f"latest: {latest['tag']} · {latest['asset']} ({megabytes:.1f} MB)")
-    print(f"  download → {latest['download']}")
-
-    updated = rewrite(html, latest)
+    updated = html
+    for app in APPS:
+        updated = rewrite(updated, app, latests[app["num"]])
 
     if args.check:
         if updated != html:
             print("index.html is out of date; run python3 tools/sync_release.py", file=sys.stderr)
             return 1
-        print("index.html already points at the latest release")
+        print("index.html already points at the latest releases")
         return 0
 
     if updated == html:
@@ -188,7 +237,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     PAGE.write_text(updated, encoding="utf-8")
-    print(f"index.html updated: {pinned['tag']} → {latest['tag']}")
+    changed = ", ".join(
+        f"{app['num']} {app['name']} {pinned_by_num[app['num']]['tag']} → {latests[app['num']]['tag']}"
+        for app in APPS
+        if pinned_by_num[app["num"]]["tag"] != latests[app["num"]]["tag"]
+    )
+    print(f"index.html updated: {changed or 'version labels unchanged'}")
     return 0
 
 

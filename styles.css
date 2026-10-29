@@ -68,7 +68,7 @@ a:focus-visible {
 .stage {
   position: relative;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr;
   min-height: 100vh;
   min-height: 100dvh;
   padding: clamp(0.9rem, 2.4vw, 1.6rem) clamp(1rem, 4vw, 2.75rem);
@@ -132,7 +132,7 @@ a:focus-visible {
 }
 
 .bar-top {
-  justify-content: flex-end;
+  justify-content: space-between;
   padding-bottom: clamp(0.9rem, 2vw, 1.35rem);
   border-bottom: var(--hairline) solid var(--line);
 }
@@ -147,12 +147,100 @@ a:focus-visible {
   white-space: nowrap;
 }
 
+/* ---------- slideshow nav ---------- */
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.nav-dot {
+  padding: 0.15rem 0.4rem;
+  border: var(--hairline) solid transparent;
+  font-size: 0.6rem;
+  font-weight: 300;
+  letter-spacing: 0.2em;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.nav-dot:hover,
+.nav-dot:focus-visible {
+  border-color: var(--ink);
+}
+
+.nav-sep {
+  opacity: 0.4;
+}
+
+.nav-arrow {
+  width: 1.7rem;
+  padding: 0.25rem 0;
+  border: var(--hairline) solid var(--ink);
+  font-size: 0.72rem;
+  letter-spacing: 0;
+  text-decoration: none;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.nav-arrow:hover,
+.nav-arrow:focus-visible {
+  background: var(--ink);
+  color: var(--fluoro);
+}
+
+/* Highlight the slide currently on screen. */
+.stage:not(:has(.slide:target)) .nav-dot[href="#app-01"],
+.stage:has(#app-01:target) .nav-dot[href="#app-01"],
+.stage:has(#app-02:target) .nav-dot[href="#app-02"] {
+  background: var(--ink);
+  color: var(--fluoro);
+}
+
+/* Hide the arrows that would leave the deck. */
+.stage:not(:has(.slide:target)) .nav-arrow[href="#app-01"],
+.stage:has(#app-01:target) .nav-arrow[href="#app-01"],
+.stage:has(#app-02:target) .nav-arrow[href="#app-02"] {
+  display: none;
+}
+
+/* ---------- deck ---------- */
+
+.deck {
+  position: relative;
+  display: grid;
+  min-height: 0;
+}
+
+/* One slide at a time: the targeted slide is shown, or the first slide when
+   the URL has no target (the default landing view). */
+.slide {
+  display: none;
+  grid-template-rows: 1fr auto;
+  min-height: 0;
+}
+
+.slide:target,
+.deck:not(:has(.slide:target)) .slide:first-of-type {
+  display: grid;
+}
+
+/* Browsers without :has() fall back to a stacked deck so content is never hidden. */
+@supports not (selector(:has(*))) {
+  .slide {
+    display: grid;
+  }
+}
+
 /* ---------- core ---------- */
 
 .core {
   position: relative;
   z-index: 1;
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -256,6 +344,17 @@ a:focus-visible {
   }
 }
 
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.7rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .hairlines {
   animation: frame-in 900ms ease both;
 }
@@ -275,12 +374,18 @@ a:focus-visible {
   animation-delay: 160ms;
 }
 
+/* A slide re-runs its entrance when it becomes the target. */
+.slide:target {
+  animation: slide-in 600ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hairlines,
   .app-code,
   .actions,
   .caption,
-  .bar {
+  .bar,
+  .slide:target {
     animation: none;
   }
 }

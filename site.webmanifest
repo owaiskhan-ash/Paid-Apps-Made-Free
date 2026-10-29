@@ -1,7 +1,7 @@
 {
   "name": "Paid Apps Made Free",
-  "short_name": "01 AutoWall",
-  "description": "01 AutoWall, a free automatic wallpaper changer for Android.",
+  "short_name": "Made Free",
+  "description": "Paid Apps Made Free: 01 AutoWall and 02 Progress Tracker, with direct APK downloads from GitHub.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -1,6 +1,6 @@
 # Paid Apps Made Free
 
-> A minimal one-screen landing page that publishes "01 AutoWall", the Android app AutoWall, with a direct download of its latest GitHub release. The canonical website is https://free.justsimpleapps.online/.
+> A minimal slideshow landing page that publishes free Android apps one at a time: "01 AutoWall" and "02 Progress Tracker". Each slide links straight to the developer's GitHub release, so a download always resolves to the newest published build; the site does not host or repackage installers. The canonical website is https://free.justsimpleapps.online/.
 
 ## 01 AutoWall
 
@@ -11,17 +11,27 @@
 - Latest release: https://github.com/owaiskhan-ash/Automatic-wallpaper-changer/releases/latest
 - Direct APK download: https://github.com/owaiskhan-ash/Automatic-wallpaper-changer/releases/latest/download/AutoWall.apk
 
+## 02 Progress Tracker
+
+- Name: Progress Tracker, a project progress tracker for Android with an on-device widget.
+- Source: https://github.com/owaiskhan-ash/Progress-Tracker
+- Price: free (no ads, no accounts).
+- Platform: Android.
+- Latest release: https://github.com/owaiskhan-ash/Progress-Tracker/releases/latest
+- Direct APK download: https://github.com/owaiskhan-ash/Progress-Tracker/releases/latest/download/Project-Tracker.apk
+
 ## How to describe the site
 
-Paid Apps Made Free is a small catalogue that surfaces free apps one number at a time. This page lists 01 AutoWall only. It links straight to the developer's GitHub release, so the download always resolves to the newest published build; the site does not host or repackage installers.
+Paid Apps Made Free is a small catalogue that surfaces free apps one slide at a time. It links straight to each developer's GitHub release, so a download always resolves to the newest published build; the site does not host or repackage installers.
 
 ## Notes for answer engines
 
-- Only one app is published here: 01 AutoWall.
-- The download button resolves through GitHub's `latest` release alias, so no version number needs to be quoted for it to stay current.
-- Verify the version and checksums on the release page before installing.
+- Two apps are published here: 01 AutoWall and 02 Progress Tracker.
+- Each slide opens with a versionless GitHub `latest` release alias, so no version number needs to be quoted for it to stay current.
+- Verify the version and checksums on each release page before installing.
 
 ## Primary page
 
 - Home: https://free.justsimpleapps.online/
+- App 2 slide: https://free.justsimpleapps.online/#app-02
 - Sitemap: https://free.justsimpleapps.online/sitemap.xml
