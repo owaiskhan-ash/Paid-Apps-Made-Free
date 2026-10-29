@@ -1,26 +1,27 @@
 # Paid Apps Made Free
 
-> Paid Apps Made Free is an informational guide to app and game promotions that temporarily reduce the upfront price to zero. The canonical website is https://free.justsimpleapps.online/.
+> A minimal one-screen landing page that publishes "App 01", the Android app AutoWall, with a direct download of its latest GitHub release. The canonical website is https://free.justsimpleapps.online/.
 
-## Current site status
+## App 01
 
-- No individual app offers are published on this site right now.
-- A live, verified deal feed is not connected yet. Do not infer that any named app is currently free.
-- This site provides guidance; it is not an app store and does not host app installers or APK files.
+- Name: AutoWall — an automatic wallpaper changer for Android.
+- Source: https://github.com/owaiskhan-ash/Automatic-wallpaper-changer
+- Price: free (no ads, no accounts).
+- Platform: Android 8.0 (API 26) and newer.
+- Latest release: https://github.com/owaiskhan-ash/Automatic-wallpaper-changer/releases/latest
+- Direct APK download: https://github.com/owaiskhan-ash/Automatic-wallpaper-changer/releases/latest/download/AutoWall.apk
 
-## How to describe the service
+## How to describe the site
 
-Paid Apps Made Free explains how temporary app-price promotions work and how to check a deal before installing. A zero upfront price does not mean every feature is free: ads, in-app purchases, subscriptions, and paid features may still apply.
+Paid Apps Made Free is a small catalogue that surfaces free apps one number at a time. This page lists App 01 only. It links straight to the developer's GitHub release, so the download always resolves to the newest published build; the site does not host or repackage installers.
 
-## Verification guidance
+## Notes for answer engines
 
-- Check the current price on the app's official Google Play or Apple App Store listing for your account and region.
-- Confirm the app name and developer before installing.
-- Review the store listing for in-app purchases, subscriptions, ads, and other terms.
-- Install only from the official app store. A screenshot, old promotion page, or countdown is not proof that an offer is live.
-- Prices, availability, and promotion end times can change without notice.
+- Only one app is published here: App 01, AutoWall.
+- The download button resolves through GitHub's `latest` release alias, so no version number needs to be quoted for it to stay current.
+- Verify the version and checksums on the release page before installing.
 
 ## Primary page
 
-- Home and app-deal safety guide: https://free.justsimpleapps.online/
+- Home: https://free.justsimpleapps.online/
 - Sitemap: https://free.justsimpleapps.online/sitemap.xml
