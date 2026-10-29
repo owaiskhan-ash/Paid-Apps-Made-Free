@@ -1,0 +1,54 @@
+name: Sync latest release
+
+on:
+  schedule:
+    # Daily at 06:17 UTC — picks up new AutoWall releases without any manual edit.
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+  repository_dispatch:
+    types: [app-release]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-latest-release
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Point the download button at the newest release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tools/sync_release.py
+
+      - name: Verify the page and the release agree
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 tools/sync_release.py --check
+          python3 -m unittest discover -s tests -v
+
+      - name: Commit the refreshed version label
+        run: |
+          if git diff --quiet -- index.html; then
+            echo "Already on the latest release."
+            exit 0
+          fi
+          version="$(python3 tools/sync_release.py --offline | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag"])')"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Point the download button at the latest release (${version})"
+          git push

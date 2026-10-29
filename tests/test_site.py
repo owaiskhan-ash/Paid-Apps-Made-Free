@@ -1,3 +1,6 @@
+import contextlib
+import importlib.util
+import io
 import json
 import re
 import struct
@@ -9,7 +12,8 @@ from xml.etree import ElementTree
 ROOT = Path(__file__).resolve().parents[1]
 CANONICAL = "https://free.justsimpleapps.online/"
 RELEASES = "https://github.com/owaiskhan-ash/Automatic-wallpaper-changer/releases/latest"
-DOWNLOAD = f"{RELEASES}/download/AutoWall.apk"
+ASSET = "AutoWall.apk"
+DOWNLOAD = f"{RELEASES}/download/{ASSET}"
 
 
 class PageParser(HTMLParser):
@@ -176,6 +180,79 @@ class LandingPageTests(unittest.TestCase):
         self.assertIn('<meta name="robots" content="noindex, nofollow">', not_found)
         self.assertIn('href="/"', not_found)
         self.assertIn("Page not found", not_found)
+
+
+class ReleaseSyncTests(unittest.TestCase):
+    """The download button must always resolve to whichever release is newest."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("sync_release", ROOT / "tools/sync_release.py")
+        cls.sync = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.sync)
+        cls.html = (ROOT / "index.html").read_text(encoding="utf-8")
+
+    @staticmethod
+    def release(tag, *names):
+        return {
+            "tag_name": tag,
+            "assets": [{"name": name, "size": 1024, "browser_download_url": "https://x/" + name} for name in names],
+        }
+
+    def test_button_is_pinned_to_the_mutable_latest_alias(self):
+        pinned = self.sync.current_pins(self.html)
+        self.assertTrue(
+            pinned["download"].startswith(RELEASES + "/download/"),
+            "The download button must use /releases/latest/download/, never a versioned URL",
+        )
+        self.assertNotRegex(pinned["download"], r"/download/v?\d")
+        self.assertRegex(pinned["tag"], r"^v\d+\.\d+")
+
+    def test_prefers_the_stable_asset_name_over_tag_stamped_or_debug_builds(self):
+        chosen = self.sync.choose_apk(self.release("v9.9.9", "AutoWall-debug.apk", "AutoWall-9.9.9.apk", "AutoWall.apk"))
+        self.assertEqual(chosen["name"], "AutoWall.apk")
+
+    def test_falls_back_when_the_asset_name_changes(self):
+        self.assertEqual(
+            self.sync.choose_apk(self.release("v2.0.0", "AutoWall-2.0.0.apk", "checksums.txt"))["name"],
+            "AutoWall-2.0.0.apk",
+        )
+        self.assertEqual(
+            self.sync.choose_apk(self.release("v2.0.1", "AutoWall-debug.apk"))["name"],
+            "AutoWall-debug.apk",
+        )
+        with self.assertRaises(self.sync.ReleaseError):
+            self.sync.choose_apk(self.release("v2.0.2", "notes.md"))
+
+    def test_rewrite_moves_every_reference_to_the_new_release(self):
+        latest = self.sync.describe(self.release("v7.0.0", "AutoWall-7.0.0.apk", "AutoWall.apk"))
+        self.assertEqual(latest["download"], DOWNLOAD)
+
+        rewritten = self.sync.rewrite(self.html, latest)
+        self.assertIn('href="' + DOWNLOAD + '"', rewritten)
+        self.assertIn('"downloadUrl": "' + DOWNLOAD + '"', rewritten)
+        self.assertIn('"installUrl": "' + RELEASES + '"', rewritten)
+        self.assertIn("v7.0.0", rewritten)
+        self.assertNotIn("v1.2.0", rewritten)
+        self.assertEqual(self.sync.rewrite(rewritten, latest), rewritten, "rewrite should be idempotent")
+
+    def test_asset_rename_is_carried_into_the_page(self):
+        latest = self.sync.describe(self.release("v8.0.0", "AutoWall-v8.apk"))
+        rewritten = self.sync.rewrite(self.html, latest)
+        self.assertIn(RELEASES + "/download/AutoWall-v8.apk", rewritten)
+
+    def test_a_release_without_an_apk_fails_loudly_instead_of_shipping_a_stale_pin(self):
+        with self.assertRaises(self.sync.ReleaseError):
+            self.sync.describe({"tag_name": "v3.0.0", "assets": []})
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.sync.main(["--offline"]), 0)
+
+    def test_workflow_keeps_the_page_in_sync(self):
+        workflow = (ROOT / ".github/workflows/sync-release.yml").read_text(encoding="utf-8")
+        self.assertIn("tools/sync_release.py", workflow)
+        self.assertIn("--check", workflow)
+        self.assertIn("schedule:", workflow)
+        self.assertIn("contents: write", workflow)
 
 
 if __name__ == "__main__":
