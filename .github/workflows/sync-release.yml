@@ -38,6 +38,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 tools/sync_release.py --check
+          python3 tools/sync_release.py --verify
           python3 -m unittest discover -s tests -v
 
       - name: Commit the refreshed version labels

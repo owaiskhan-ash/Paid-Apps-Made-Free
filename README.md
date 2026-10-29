@@ -40,7 +40,7 @@ Then open `http://localhost:8000`.
 
 ## Keeping the downloads on the latest release
 
-Two independent safeguards:
+Three independent safeguards:
 
 1. **The links are versionless by construction.** Each points at GitHub's
    `/releases/latest/download/<asset>` alias, which redirects to whatever release is
@@ -52,9 +52,14 @@ Two independent safeguards:
    release-notes href, JSON-LD `downloadUrl`/`installUrl`, and caption version. It exits
    non-zero instead of writing anything if a lookup fails or a release ships no APK, so a
    stale pin is never published silently.
+3. **CI proves each button really reaches that release.** `--verify` asks GitHub where
+   every `latest` alias actually redirects and fails unless it lands on the same tag and
+   asset the API just reported, so a renamed APK or an alias still serving an older tag
+   stops the workflow before it commits.
 
 `.github/workflows/sync-release.yml` runs that script daily, on manual dispatch, and
-on a `repository_dispatch` of type `app-release`, then commits the refreshed labels.
+on a `repository_dispatch` of type `app-release`, then re-checks the result with
+`--check` and `--verify` and commits the refreshed labels.
 To make new releases land on the page within seconds instead of within a day, add
 this step to each app repository's release workflow:
 
@@ -72,6 +77,7 @@ Manual runs:
 ```sh
 python3 tools/sync_release.py            # rewrite every slide to the newest release
 python3 tools/sync_release.py --check    # CI: exit 1 if any slide is stale
+python3 tools/sync_release.py --verify   # CI: prove every button resolves to that tag
 python3 tools/sync_release.py --offline  # just print what each slide currently pins
 ```
 
