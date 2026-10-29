@@ -134,11 +134,17 @@
 
       <header class="bar bar-top">
         <nav class="nav" aria-label="Apps">
-          <a class="nav-arrow nav-prev" href="#app-01" aria-label="Previous app"><span aria-hidden="true">←</span></a>
+          <span class="nav-arrow nav-prev is-disabled" aria-hidden="true">←</span>
+          <a class="nav-arrow nav-prev nav-prev-01" href="#app-01" aria-label="Previous app"><span aria-hidden="true">←</span></a>
+          <a class="nav-arrow nav-prev nav-prev-02" href="#app-02" aria-label="Previous app"><span aria-hidden="true">←</span></a>
           <a class="nav-dot" href="#app-01">01</a>
           <span class="nav-sep" aria-hidden="true">/</span>
           <a class="nav-dot" href="#app-02">02</a>
-          <a class="nav-arrow nav-next" href="#app-02" aria-label="Next app"><span aria-hidden="true">→</span></a>
+          <span class="nav-sep" aria-hidden="true">/</span>
+          <a class="nav-dot" href="#app-03">03</a>
+          <a class="nav-arrow nav-next nav-next-02" href="#app-02" aria-label="Next app"><span aria-hidden="true">→</span></a>
+          <a class="nav-arrow nav-next nav-next-03" href="#app-03" aria-label="Next app"><span aria-hidden="true">→</span></a>
+          <span class="nav-arrow nav-next is-disabled" aria-hidden="true">→</span>
         </nav>
         <span class="tag">FREE</span>
       </header>
@@ -181,11 +187,34 @@
               </a>
             </div>
 
-            <p class="caption">Latest release <span aria-hidden="true">·</span> v1.1.5 <span aria-hidden="true">·</span> APK</p>
+            <p class="caption">Latest release <span aria-hidden="true">·</span> v1.1.8 <span aria-hidden="true">·</span> APK</p>
           </div>
 
           <footer class="bar bar-bottom">
             <span class="tag">Progress Tracker</span>
+            <span class="tag">Android</span>
+          </footer>
+        </section>
+
+        <section class="slide slide-03" id="app-03" aria-labelledby="app-03-code">
+          <div class="core">
+            <h1 class="app-code" id="app-03-code"><span class="code-num">03</span> Dummy App</h1>
+
+            <div class="actions">
+              <a class="btn btn-primary" href="#app-03" aria-disabled="true">
+                <span>Download</span>
+                <span class="btn-glyph" aria-hidden="true">↓</span>
+              </a>
+              <a class="btn btn-square" href="#app-03" aria-label="Placeholder release link" aria-disabled="true">
+                <span aria-hidden="true">↗</span>
+              </a>
+            </div>
+
+            <p class="caption">Placeholder <span aria-hidden="true">·</span> v0.0.0 <span aria-hidden="true">·</span> APK</p>
+          </div>
+
+          <footer class="bar bar-bottom">
+            <span class="tag">Dummy App</span>
             <span class="tag">Android</span>
           </footer>
         </section>

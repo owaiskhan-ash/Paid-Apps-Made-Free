@@ -181,6 +181,12 @@ a:focus-visible {
   letter-spacing: 0;
 }
 
+.nav-arrow.is-disabled {
+  border-color: var(--line);
+  color: rgba(11, 11, 11, 0.32);
+  pointer-events: none;
+}
+
 .nav-dot {
   padding: 0 0.42rem;
 }
@@ -203,16 +209,27 @@ a:focus-visible {
 /* Highlight the slide currently on screen. */
 .stage:not(:has(.slide:target)) .nav-dot[href="#app-01"],
 .stage:has(#app-01:target) .nav-dot[href="#app-01"],
-.stage:has(#app-02:target) .nav-dot[href="#app-02"] {
+.stage:has(#app-02:target) .nav-dot[href="#app-02"],
+.stage:has(#app-03:target) .nav-dot[href="#app-03"] {
   background: var(--ink);
   color: var(--fluoro);
 }
 
-/* Hide the arrows that would leave the deck. */
-.stage:not(:has(.slide:target)) .nav-arrow[href="#app-01"],
-.stage:has(#app-01:target) .nav-arrow[href="#app-01"],
-.stage:has(#app-02:target) .nav-arrow[href="#app-02"] {
+/* Keep one prev and one next arrow box visible at every slide so the tabs never shift. */
+.nav-prev,
+.nav-next {
   display: none;
+}
+
+.stage:not(:has(.slide:target)) .nav-prev.is-disabled,
+.stage:has(#app-01:target) .nav-prev.is-disabled,
+.stage:has(#app-02:target) .nav-prev-01,
+.stage:has(#app-03:target) .nav-prev-02,
+.stage:not(:has(.slide:target)) .nav-next-02,
+.stage:has(#app-01:target) .nav-next-02,
+.stage:has(#app-02:target) .nav-next-03,
+.stage:has(#app-03:target) .nav-next.is-disabled {
+  display: inline-flex;
 }
 
 /* ---------- deck ---------- */
@@ -370,14 +387,12 @@ a:focus-visible {
 
 @keyframes slide-in {
   from {
-    opacity: 0;
-    transform: translateY(0.7rem);
-    filter: blur(2px);
+    opacity: 0.45;
+    transform: translate3d(0, 0.4rem, 0);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
@@ -385,34 +400,40 @@ a:focus-visible {
   animation: frame-in 900ms ease both;
 }
 
-.app-code,
-.caption,
-.bar {
+.bar-top {
   animation: rise 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
-/* The download and shortcut buttons slide in just after the headline. */
-.actions {
+/* Staggered rise runs only on the initial landing view; switching slides never
+   fades the bottom bar or blanks out the buttons and caption. */
+.deck:not(:has(.slide:target)):not(.has-interacted) .app-code,
+.deck:not(:has(.slide:target)):not(.has-interacted) .caption,
+.deck:not(:has(.slide:target)):not(.has-interacted) .bar-bottom {
+  animation: rise 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.deck:not(:has(.slide:target)):not(.has-interacted) .actions {
   animation: buttons-in 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
   animation-delay: 140ms;
 }
 
-.caption {
+.deck:not(:has(.slide:target)):not(.has-interacted) .caption {
   animation-delay: 240ms;
 }
 
-/* A slide re-runs its entrance when it becomes the target. */
-.slide:target {
-  animation: slide-in 600ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+/* Non-swipe tab changes animate only the middle elements once, leaving bars steady. */
+.slide:target .core:not(.is-settled):not(.is-swiping):not(.is-snapping):not(.swipe-in-next):not(.swipe-in-prev) {
+  animation: slide-in 240ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .hairlines,
-  .app-code,
-  .actions,
-  .caption,
-  .bar,
-  .slide:target {
+  .bar-top,
+  .deck:not(:has(.slide:target)):not(.has-interacted) .app-code,
+  .deck:not(:has(.slide:target)):not(.has-interacted) .actions,
+  .deck:not(:has(.slide:target)):not(.has-interacted) .caption,
+  .deck:not(:has(.slide:target)):not(.has-interacted) .bar-bottom,
+  .slide:target .core:not(.is-settled):not(.is-swiping):not(.is-snapping):not(.swipe-in-next):not(.swipe-in-prev) {
     animation: none;
   }
 }
@@ -434,12 +455,17 @@ a:focus-visible {
   .bar {
     letter-spacing: 0.22em;
   }
+
+  .nav {
+    gap: 0.38rem;
+  }
 }
 
 /* ---------- mobile swipe ---------- */
-/* swipe.js only engages below the same 620px breakpoint, so these rules stay
-   inert on pointer-and-keyboard layouts. Without JavaScript the deck keeps
-   working through the arrows and the #app-01 / #app-02 fragments. */
+/* swipe.js only engages below the same 620px breakpoint (or on coarse pointers),
+   moving only the middle .core elements while the top bar, bottom bar, and
+   hairlines remain completely still. Without JavaScript the deck keeps working
+   through the arrows and the #app-01 / #app-02 / #app-03 fragments. */
 
 .swipe-status {
   position: absolute;
@@ -455,8 +481,8 @@ a:focus-visible {
 
 @keyframes swipe-from-next {
   from {
-    opacity: 0.35;
-    transform: translate3d(30%, 0, 0);
+    opacity: 0.45;
+    transform: translate3d(24%, 0, 0);
   }
   to {
     opacity: 1;
@@ -466,8 +492,8 @@ a:focus-visible {
 
 @keyframes swipe-from-prev {
   from {
-    opacity: 0.35;
-    transform: translate3d(-30%, 0, 0);
+    opacity: 0.45;
+    transform: translate3d(-24%, 0, 0);
   }
   to {
     opacity: 1;
@@ -478,37 +504,54 @@ a:focus-visible {
 /* Phones and tablets: narrow viewports, or any coarse pointer such as a finger.
    Keep this query in sync with MOBILE_QUERY in swipe.js. */
 @media (max-width: 620px), (hover: none) and (pointer: coarse) {
-  /* Horizontal swipes belong to the deck; vertical gestures still scroll. */
-  .stage {
+  /* Horizontal swipes in the middle area belong to the deck; vertical gestures still scroll. */
+  .core {
     touch-action: pan-y;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    will-change: transform;
   }
 
-  /* The slide follows the finger while it is being dragged. */
-  .slide.is-swiping {
+  /* Only the middle elements follow the finger; top bar, bottom bar, and hairlines stay put. */
+  .core.is-swiping {
     animation: none;
+    transition: none;
     transform: translate3d(var(--swipe-x, 0px), 0, 0);
     -webkit-user-select: none;
     user-select: none;
   }
 
-  /* A completed swipe brings the next slide in from the side it came from. */
-  .slide.swipe-in-next {
-    animation: swipe-from-next 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  /* An uncommitted drag eases smoothly back to centre instead of snapping. */
+  .core.is-snapping {
+    animation: none;
+    transition: transform 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    transform: translate3d(0, 0, 0);
   }
 
-  .slide.swipe-in-prev {
-    animation: swipe-from-prev 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  /* A completed swipe brings the incoming middle elements in from the side they came from. */
+  .core.swipe-in-next {
+    animation: swipe-from-next 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+
+  .core.swipe-in-prev {
+    animation: swipe-from-prev 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .slide.is-swiping {
+  .core {
+    will-change: auto;
+  }
+
+  .core.is-swiping,
+  .core.is-snapping {
     animation: none;
+    transition: none;
     transform: none;
   }
 
-  .slide.swipe-in-next,
-  .slide.swipe-in-prev {
+  .core.swipe-in-next,
+  .core.swipe-in-prev {
     animation: none;
   }
 }
