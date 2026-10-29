@@ -18,6 +18,18 @@ ASSETS = ROOT / "assets"
 SOURCE_ICON = ASSETS / "free-app-icon.png"
 OG_IMAGE = ASSETS / "og-image.png"
 
+DERIVED_PNGS = {
+    ASSETS / "favicon-16x16.png": 16,
+    ASSETS / "favicon-32x32.png": 32,
+    ASSETS / "favicon-48x48.png": 48,
+    ASSETS / "favicon-96x96.png": 96,
+    ASSETS / "apple-touch-icon.png": 180,
+    ROOT / "apple-touch-icon.png": 180,
+    ASSETS / "icon-192x192.png": 192,
+    ROOT / "favicon.png": 192,
+    ASSETS / "icon-512x512.png": 512,
+}
+
 
 def png_dimensions(path: Path) -> tuple[int, int]:
     header = path.read_bytes()[:24]
@@ -34,38 +46,26 @@ def main() -> None:
 
     convert = shutil.which("convert")
     if convert:
-        subprocess.run(
-            [
-                convert,
-                str(SOURCE_ICON),
-                "-filter",
-                "Lanczos",
-                "-resize",
-                "180x180",
-                "-strip",
-                f"PNG24:{ASSETS / 'apple-touch-icon.png'}",
-            ],
-            check=True,
-        )
-        subprocess.run(
-            [
-                convert,
-                str(SOURCE_ICON),
-                "-filter",
-                "Lanczos",
-                "-resize",
-                "32x32",
-                "-strip",
-                f"PNG24:{ASSETS / 'favicon-32x32.png'}",
-            ],
-            check=True,
-        )
+        for dest, size in DERIVED_PNGS.items():
+            subprocess.run(
+                [
+                    convert,
+                    str(SOURCE_ICON),
+                    "-filter",
+                    "Lanczos",
+                    "-resize",
+                    f"{size}x{size}",
+                    "-strip",
+                    f"PNG24:{dest}",
+                ],
+                check=True,
+            )
         subprocess.run(
             [
                 convert,
                 str(SOURCE_ICON),
                 "-define",
-                "icon:auto-resize=48,32,16",
+                "icon:auto-resize=96,48,32,16",
                 "-strip",
                 str(ROOT / "favicon.ico"),
             ],
@@ -73,9 +73,11 @@ def main() -> None:
         )
 
     og_size = png_dimensions(OG_IMAGE)
-    touch_size = png_dimensions(ASSETS / "apple-touch-icon.png")
-    fav_size = png_dimensions(ASSETS / "favicon-32x32.png")
-    print(f"verified og-image.png={og_size}, apple-touch-icon.png={touch_size}, favicon-32x32.png={fav_size}")
+    for dest, size in DERIVED_PNGS.items():
+        actual = png_dimensions(dest)
+        if actual != (size, size):
+            raise RuntimeError(f"Expected {dest} to be {(size, size)}, got {actual}")
+    print(f"verified og-image.png={og_size} and {len(DERIVED_PNGS)} derived icons + favicon.ico")
 
 
 if __name__ == "__main__":
