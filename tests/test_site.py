@@ -32,6 +32,12 @@ DOWNLOAD_02 = f"{RELEASES_02}/download/{ASSET_02}"
 RELEASES_03 = "https://github.com/owaiskhan-ash/Video-Downloader/releases/latest"
 RELEASES_04 = "https://github.com/owaiskhan-ash/Faster-Downloads/releases/latest"
 
+# The square button beside each Download opens the repository, not the release page.
+REPO_01 = "https://github.com/owaiskhan-ash/Automatic-wallpaper-changer"
+REPO_02 = "https://github.com/owaiskhan-ash/Progress-Tracker"
+REPO_03 = "https://github.com/owaiskhan-ash/Video-Downloader"
+REPO_04 = "https://github.com/owaiskhan-ash/Faster-Downloads"
+
 TAG_STAMPED = (
     ("app-03", RELEASES_03, "arm64-v8a"),
     ("app-04", RELEASES_04, None),
@@ -267,22 +273,39 @@ class LandingPageTests(unittest.TestCase):
 
     def test_download_buttons_target_the_latest_release_apk_for_every_app(self):
         # Stable asset names: these two URLs must never change.
-        for download, releases in ((DOWNLOAD_01, RELEASES_01), (DOWNLOAD_02, RELEASES_02)):
+        for download in (DOWNLOAD_01, DOWNLOAD_02):
             self.assertIn(f'href="{download}"', self.html)
-            self.assertIn(f'href="{releases}"', self.html)
         self.assertIn("Download", self.visible_text)
 
-        # Two buttons per app, in slide order, all on the versionless alias.
+        # The only /releases/ links left are the four direct downloads.
         links = [href for href in self.parser.links if "/releases/" in href]
-        self.assertEqual(len(links), 8, "One download and one release link per app")
-        self.assertEqual(links[0::2][0], DOWNLOAD_01)
-        self.assertEqual(links[0::2][1], DOWNLOAD_02)
-        self.assertEqual(links[1::2], [RELEASES_01, RELEASES_02, RELEASES_03, RELEASES_04])
-        for href in links[0::2]:
+        self.assertEqual(len(links), 4, "One direct download link per app")
+        self.assertEqual(links[0], DOWNLOAD_01)
+        self.assertEqual(links[1], DOWNLOAD_02)
+        for href in links:
             self.assertIn("/releases/latest/download/", href)
             self.assertTrue(href.endswith(".apk"))
         self.assertIn('rel="noopener"', self.html)
         self.assertIn('target="_blank"', self.html)
+
+    def test_square_button_opens_the_repository_not_the_release_page(self):
+        slides = (
+            ("app-01", REPO_01, RELEASES_01),
+            ("app-02", REPO_02, RELEASES_02),
+            ("app-03", REPO_03, RELEASES_03),
+            ("app-04", REPO_04, RELEASES_04),
+        )
+        for slide_id, repo, releases in slides:
+            block = slide_block(self.html, slide_id)
+            square = re.search(r'class="btn btn-square" href="([^"]+)"', block).group(1)
+            self.assertEqual(square, repo, f"{slide_id} must open the repository")
+            self.assertNotIn("/releases/", square)
+            self.assertIn('aria-label="Open the GitHub repository"', block)
+            # The release page still exists, but only as the structured-data install target.
+            self.assertIn(f'"installUrl": "{releases}"', self.html)
+
+        # No button anywhere points at a release page.
+        self.assertFalse([href for href in self.parser.links if re.search(r"/releases/(latest|tag)/?$", href)])
 
     def test_tag_stamped_downloads_follow_their_newest_tag(self):
         # The button, the caption and the structured data must name one release,
@@ -301,7 +324,7 @@ class LandingPageTests(unittest.TestCase):
             caption = re.search(r'<p class="caption">.*?(v\d+\.\d+(?:\.\d+)?)', block, flags=re.DOTALL).group(1)
             self.assertEqual(caption, f"v{version}", "The caption must name the tag inside the pinned filename")
 
-            self.assertIn(f'href="{releases}"', block, "The square button opens the release page")
+            self.assertIn('aria-label="Open the GitHub repository"', block, "The square button opens the repository")
             self.assertIn(f'"downloadUrl": "{href}"', self.html, "JSON-LD must name the same APK")
             self.assertIn(f'"installUrl": "{releases}"', self.html)
 
@@ -534,6 +557,20 @@ class ReleaseSyncTests(unittest.TestCase):
         self.assertNotIn(self.pinned["03"]["download"], rewritten, "The old tag-stamped filename must be gone")
         self.assertIn("v1.3.0", rewritten, "The first slide is untouched")
         self.assertEqual(self.sync.rewrite(rewritten, self.teal, latest), rewritten, "rewrite should be idempotent")
+
+    def test_rewrite_restores_a_repository_button_that_drifted(self):
+        # The square button is not release-specific, so a release must not point it
+        # back at a release page; the sync puts it on the repository instead.
+        drifted = self.html.replace(
+            f'class="btn btn-square" href="{REPO_01}"',
+            f'class="btn btn-square" href="{RELEASES_01}"',
+        )
+        self.assertNotEqual(drifted, self.html)
+
+        latest = self.sync.describe(self.autowall, self.release("v1.3.0", "AutoWall.apk"))
+        rewritten = self.sync.rewrite(drifted, self.autowall, latest)
+        self.assertIn(f'class="btn btn-square" href="{REPO_01}"', rewritten)
+        self.assertNotIn(f'class="btn btn-square" href="{RELEASES_01}"', rewritten)
 
     def test_asset_rename_is_carried_into_the_page(self):
         latest = self.sync.describe(self.autowall, self.release("v8.0.0", "AutoWall-v8.apk"))

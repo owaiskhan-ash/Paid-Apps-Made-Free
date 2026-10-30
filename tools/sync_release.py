@@ -11,8 +11,10 @@ still drift, though, and this script fixes both for every app:
    last edited.
 
 It reads each app's GitHub release API, picks the installable APK, then
-rewrites the slide (download button, release-notes button, caption) and the
-JSON-LD entry so everything names the same, currently-latest release.
+rewrites the slide (download button, caption) and the JSON-LD entry so
+everything names the same, currently-latest release. The square button beside
+the download is deliberately not release-specific: it is pinned to the app's
+repository, and this script restores that if it ever drifts.
 
 Some apps stamp the version into the asset name (``teal-<version>-arm64-v8a.apk``)
 and ship one APK per ABI. Those entries set ``abi`` so the newest release always
@@ -268,9 +270,11 @@ def rewrite(html: str, app: dict, latest: dict) -> str:
         lambda m: f'{m.group(1)}{latest["download"]}{m.group(2)}',
         body,
     )
-    body, install_hits = re.subn(
-        r'(class="btn btn-square" href=")' + esc + r'/releases/[^"]*(")',
-        lambda m: f'{m.group(1)}{latest["install"]}{m.group(2)}',
+    # The square button goes to the repository, not to the release page, so it is
+    # stable across releases: enforce the target instead of re-pinning it.
+    body, repo_hits = re.subn(
+        r'(class="btn btn-square" href=")[^"]*(")',
+        lambda m: f'{m.group(1)}{app_base(app)}{m.group(2)}',
         body,
     )
     body, caption_hits = re.subn(
@@ -279,11 +283,11 @@ def rewrite(html: str, app: dict, latest: dict) -> str:
         body,
         flags=re.DOTALL,
     )
-    if not (download_hits and install_hits and caption_hits):
+    if not (download_hits and repo_hits and caption_hits):
         raise ReleaseError(
             f"slide for {app['num']} {app['name']} no longer matches the expected "
-            f"download button / caption markup "
-            f"(button={download_hits}, notes={install_hits}, caption={caption_hits})"
+            f"download button / repository button / caption markup "
+            f"(button={download_hits}, repo={repo_hits}, caption={caption_hits})"
         )
 
     html = html[: match.start()] + head + body + tail + html[match.end():]
