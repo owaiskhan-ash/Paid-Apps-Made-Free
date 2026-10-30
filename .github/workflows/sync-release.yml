@@ -4,7 +4,7 @@ on:
   schedule:
     # Every 15 minutes, not daily. Apps 01 and 02 name their APK after the app, so
     # their buttons stay correct between runs; 03 Teal stamps the version into every
-    # asset name (teal-v0.3.0-arm64-v8a-debug.apk), so its pinned filename starts
+    # asset name (teal-v0.4.0-arm64-v8a.apk), so its pinned filename starts
     # 404ing the moment a tag is published. This cadence re-pins that name within
     # minutes instead of within a day. GitHub may delay a scheduled run under load,
     # and a push or the repository_dispatch below still refreshes it immediately.
