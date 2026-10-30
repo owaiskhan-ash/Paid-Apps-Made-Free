@@ -210,7 +210,8 @@ a:focus-visible {
 .stage:not(:has(.slide:target)) .nav-dot[href="#app-01"],
 .stage:has(#app-01:target) .nav-dot[href="#app-01"],
 .stage:has(#app-02:target) .nav-dot[href="#app-02"],
-.stage:has(#app-03:target) .nav-dot[href="#app-03"] {
+.stage:has(#app-03:target) .nav-dot[href="#app-03"],
+.stage:has(#app-04:target) .nav-dot[href="#app-04"] {
   background: var(--ink);
   color: var(--fluoro);
 }
@@ -225,10 +226,12 @@ a:focus-visible {
 .stage:has(#app-01:target) .nav-prev.is-disabled,
 .stage:has(#app-02:target) .nav-prev-01,
 .stage:has(#app-03:target) .nav-prev-02,
+.stage:has(#app-04:target) .nav-prev-03,
 .stage:not(:has(.slide:target)) .nav-next-02,
 .stage:has(#app-01:target) .nav-next-02,
 .stage:has(#app-02:target) .nav-next-03,
-.stage:has(#app-03:target) .nav-next.is-disabled {
+.stage:has(#app-03:target) .nav-next-04,
+.stage:has(#app-04:target) .nav-next.is-disabled {
   display: inline-flex;
 }
 
@@ -465,7 +468,7 @@ a:focus-visible {
 /* swipe.js only engages below the same 620px breakpoint (or on coarse pointers),
    moving only the middle .core elements while the top bar, bottom bar, and
    hairlines remain completely still. Without JavaScript the deck keeps working
-   through the arrows and the #app-01 / #app-02 / #app-03 fragments. */
+   through the arrows and the #app-01 to #app-04 fragments. */
 
 .swipe-status {
   position: absolute;

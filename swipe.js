@@ -2,7 +2,7 @@
    Progressive enhancement only: only the middle (.core) elements respond to and
    move with the gesture while the top bar, bottom bar, and hairlines remain
    stationary. Without this file the top-bar arrows and the #app-01 / #app-02 /
-   #app-03 fragments still move between slides. */
+   #app-04 fragments still move between slides. */
 (function () {
   "use strict";
 
