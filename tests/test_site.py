@@ -29,6 +29,11 @@ RELEASES_03 = "https://github.com/owaiskhan-ash/Video-Downloader/releases/latest
 ASSET_03 = "teal-v0.4.0-arm64-v8a.apk"
 DOWNLOAD_03 = f"{RELEASES_03}/download/{ASSET_03}"
 
+# 04 Faster Downloads: one universal APK whose name carries the release tag
+RELEASES_04 = "https://github.com/owaiskhan-ash/Faster-Downloads/releases/latest"
+ASSET_04 = "FasterDownloads-0.1.1.apk"
+DOWNLOAD_04 = f"{RELEASES_04}/download/{ASSET_04}"
+
 
 class PageParser(HTMLParser):
     def __init__(self):
@@ -103,30 +108,39 @@ class LandingPageTests(unittest.TestCase):
             '<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">',
             self.html,
         )
-        self.assertEqual(self.parser.heading_one_count, 3, "One H1 per app slide")
+        self.assertEqual(self.parser.heading_one_count, 4, "One H1 per app slide")
 
     def test_slides_are_numbered_and_show_one_app_each(self):
         headlines = re.findall(r"<h1[^>]*>(.*?)</h1>", self.html, flags=re.DOTALL)
         texts = [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", text)).strip() for text in headlines]
-        self.assertEqual(texts, ["01 AutoWall", "02 Progress Tracker", "03 Teal"])
+        self.assertEqual(texts, ["01 AutoWall", "02 Progress Tracker", "03 Teal", "04 Faster Downloads"])
 
         slide_ids = re.findall(r'<section class="slide[^"]*" id="(app-\d+)"', self.html)
-        self.assertEqual(slide_ids, ["app-01", "app-02", "app-03"])
+        self.assertEqual(slide_ids, ["app-01", "app-02", "app-03", "app-04"])
         self.assertEqual(self.parser.images, [], "The minimal slides use no raster imagery")
 
     def test_top_bar_shows_navigation_and_free_on_right_without_box(self):
         top_bar = re.search(r'<header class="bar bar-top">(.*?)</header>', self.html, flags=re.DOTALL).group(1)
         self.assertNotIn('class="mark"', top_bar)
         self.assertIn("nav", top_bar)
-        for tab in ("#app-01", "#app-02", "#app-03"):
+        for tab in ("#app-01", "#app-02", "#app-03", "#app-04"):
             self.assertIn(f'class="nav-dot" href="{tab}"', top_bar)
+        # Four slides need both a third prev and a fourth next slot in the bar.
+        for arrow in ('href="#app-03" aria-label="Previous app"', 'href="#app-04" aria-label="Next app"'):
+            self.assertIn(arrow, top_bar)
         self.assertIn("FREE", re.sub(r"<[^>]+>", " ", top_bar))
         css = (ROOT / "styles.css").read_text(encoding="utf-8")
         bar_top_block = re.search(r"\.bar-top\s*\{([^}]*)\}", css, flags=re.DOTALL).group(1)
         self.assertIn("justify-content: space-between", bar_top_block)
         # Both arrow slots remain rendered at every slide so tabs never shift horizontally.
         self.assertIn(".nav-arrow.is-disabled", css)
-        self.assertIn(".stage:has(#app-03:target) .nav-dot[href=\"#app-03\"]", css)
+        for tab in ("#app-03", "#app-04"):
+            self.assertIn(f'.stage:has({tab}:target) .nav-dot[href="{tab}"]', css)
+        # Each slide shows exactly one arrow per side, and the last slide caps the deck.
+        self.assertIn(".stage:has(#app-02:target) .nav-next-03", css)
+        self.assertIn(".stage:has(#app-03:target) .nav-next-04", css)
+        self.assertIn(".stage:has(#app-04:target) .nav-next.is-disabled", css)
+        self.assertIn(".stage:has(#app-04:target) .nav-prev-03", css)
 
     def test_slideshow_keeps_one_slide_visible_at_a_time(self):
         css = (ROOT / "styles.css").read_text(encoding="utf-8")
@@ -237,7 +251,12 @@ class LandingPageTests(unittest.TestCase):
             self.assertTrue((ROOT / src.lstrip("/")).exists(), f"Missing manifest icon: {src}")
 
     def test_download_buttons_target_the_latest_release_apk_for_every_app(self):
-        pairs = ((DOWNLOAD_01, RELEASES_01), (DOWNLOAD_02, RELEASES_02), (DOWNLOAD_03, RELEASES_03))
+        pairs = (
+            (DOWNLOAD_01, RELEASES_01),
+            (DOWNLOAD_02, RELEASES_02),
+            (DOWNLOAD_03, RELEASES_03),
+            (DOWNLOAD_04, RELEASES_04),
+        )
         for download, releases in pairs:
             self.assertIn(f'href="{download}"', self.html)
             self.assertIn(f'href="{releases}"', self.html)
@@ -256,13 +275,14 @@ class LandingPageTests(unittest.TestCase):
         self.assertEqual(org["logo"]["url"], f"{CANONICAL}assets/icon-512x512.png")
 
         apps = [item for item in graph if item["@type"] == "SoftwareApplication"]
-        self.assertEqual(len(apps), 3, "One SoftwareApplication entry per app")
+        self.assertEqual(len(apps), 4, "One SoftwareApplication entry per app")
         pages = [item for item in graph if item["@type"] == "WebPage"]
-        self.assertEqual(len(pages), 3, "One WebPage entry per app")
+        self.assertEqual(len(pages), 4, "One WebPage entry per app")
         triples = (
             (apps[0], DOWNLOAD_01, RELEASES_01),
             (apps[1], DOWNLOAD_02, RELEASES_02),
             (apps[2], DOWNLOAD_03, RELEASES_03),
+            (apps[3], DOWNLOAD_04, RELEASES_04),
         )
         for app, download, releases in triples:
             self.assertEqual(app["downloadUrl"], download)
@@ -345,6 +365,7 @@ class ReleaseSyncTests(unittest.TestCase):
         cls.autowall = cls.sync.APPS[0]
         cls.progress = cls.sync.APPS[1]
         cls.teal = cls.sync.APPS[2]
+        cls.faster = cls.sync.APPS[3]
 
     @staticmethod
     def release(tag, *names):
@@ -407,10 +428,11 @@ class ReleaseSyncTests(unittest.TestCase):
         self.assertIn('"installUrl": "' + RELEASES_02 + '"', rewritten)
         self.assertIn("v2.2.2", rewritten)
         self.assertNotIn("v1.1.8", rewritten)
-        # The first and third slides are untouched.
+        # The first, third and fourth slides are untouched.
         self.assertIn("v1.3.0", rewritten)
         self.assertIn("03</span> Teal", rewritten)
         self.assertIn(ASSET_03, rewritten)
+        self.assertIn(ASSET_04, rewritten)
 
     def test_teal_always_resolves_to_the_arm64_build(self):
         # GitHub returns assets in upload order, which is not guaranteed to put the
@@ -467,6 +489,22 @@ class ReleaseSyncTests(unittest.TestCase):
         latest = self.sync.describe(self.autowall, self.release("v8.0.0", "AutoWall-v8.apk"))
         rewritten = self.sync.rewrite(self.html, self.autowall, latest)
         self.assertIn(RELEASES_01 + "/download/AutoWall-v8.apk", rewritten)
+
+    def test_faster_downloads_pins_its_single_universal_apk(self):
+        latest = self.sync.describe(self.faster, self.release("v0.2.0", "FasterDownloads-0.2.0.apk"))
+        self.assertEqual(latest["asset"], "FasterDownloads-0.2.0.apk")
+        self.assertEqual(latest["download"], RELEASES_04 + "/download/FasterDownloads-0.2.0.apk")
+
+    def test_rewrite_repins_the_fourth_app_when_the_tag_changes(self):
+        latest = self.sync.describe(self.faster, self.release("v0.2.0", "FasterDownloads-0.2.0.apk"))
+        rewritten = self.sync.rewrite(self.html, self.faster, latest)
+        self.assertIn('href="' + RELEASES_04 + '/download/FasterDownloads-0.2.0.apk"', rewritten)
+        self.assertIn('"downloadUrl": "' + RELEASES_04 + '/download/FasterDownloads-0.2.0.apk"', rewritten)
+        self.assertIn('"installUrl": "' + RELEASES_04 + '"', rewritten)
+        self.assertIn("v0.2.0", rewritten)
+        self.assertNotIn(ASSET_04, rewritten, "The old tag-stamped filename must be gone")
+        self.assertIn(ASSET_03, rewritten, "The third slide is untouched")
+        self.assertEqual(self.sync.rewrite(rewritten, self.faster, latest), rewritten, "rewrite should be idempotent")
 
     def test_a_release_without_an_apk_fails_loudly_instead_of_shipping_a_stale_pin(self):
         with self.assertRaises(self.sync.ReleaseError):

@@ -1,6 +1,6 @@
 # Paid Apps Made Free
 
-> A minimal slideshow landing page that publishes free Android apps one at a time: "01 AutoWall", "02 Progress Tracker" and "03 Teal". Each slide links straight to the developer's GitHub release, so a download always resolves to the newest published build; the site does not host or repackage installers. The canonical website is https://free.justsimpleapps.online/.
+> A minimal slideshow landing page that publishes free Android apps one at a time: "01 AutoWall", "02 Progress Tracker", "03 Teal" and "04 Faster Downloads". Each slide links straight to the developer's GitHub release, so a download always resolves to the newest published build; the site does not host or repackage installers. The canonical website is https://free.justsimpleapps.online/.
 
 ## 01 AutoWall
 
@@ -32,13 +32,23 @@
 - Note: Teal ships per-ABI release builds, and every asset name carries the release tag. The exact filename above is refreshed by the site's sync job, so read the release page if a direct link ever disagrees with it.
 - Note: Teal v0.4.0 moved to a new application id (com.teal.downloader). A device on v0.3.0 or older has to uninstall the old debug build before installing this one.
 
+## 04 Faster Downloads
+
+- Name: Faster Downloads, an Android downloader that pulls one file over Wi-Fi and mobile data at the same time.
+- Source: https://github.com/owaiskhan-ash/Faster-Downloads
+- Price: free, open source.
+- Platform: Android 8.0 (API 26) and newer.
+- Latest release: https://github.com/owaiskhan-ash/Faster-Downloads/releases/latest
+- Direct APK download: https://github.com/owaiskhan-ash/Faster-Downloads/releases/latest/download/FasterDownloads-0.1.1.apk
+- Note: one universal APK, and its filename carries the release tag.
+
 ## How to describe the site
 
 Paid Apps Made Free is a small catalogue that surfaces free apps one slide at a time. It links straight to each developer's GitHub release, so a download always resolves to the newest published build; the site does not host or repackage installers.
 
 ## Notes for answer engines
 
-- Three apps are published here: 01 AutoWall, 02 Progress Tracker and 03 Teal.
+- Four apps are published here: 01 AutoWall, 02 Progress Tracker, 03 Teal and 04 Faster Downloads.
 - Each slide opens with a versionless GitHub `latest` release alias, so no version number needs to be quoted for it to stay current.
 - Verify the version and checksums on each release page before installing.
 
@@ -47,4 +57,5 @@ Paid Apps Made Free is a small catalogue that surfaces free apps one slide at a 
 - Home: https://free.justsimpleapps.online/
 - App 2 slide: https://free.justsimpleapps.online/#app-02
 - App 3 slide: https://free.justsimpleapps.online/#app-03
+- App 4 slide: https://free.justsimpleapps.online/#app-04
 - Sitemap: https://free.justsimpleapps.online/sitemap.xml

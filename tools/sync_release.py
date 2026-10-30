@@ -86,6 +86,18 @@ APPS = (
         "operating_system": "Android 7.0+",
         "application_category": "MultimediaApplication",
     },
+    {
+        "num": "04",
+        "name": "Faster Downloads",
+        "id": "app-04",
+        "owner": "owaiskhan-ash",
+        "repo": "Faster-Downloads",
+        # One universal APK, but its name still carries the tag
+        # (FasterDownloads-0.1.1.apk), so the same re-pinning applies.
+        "preferred": ("FasterDownloads.apk",),
+        "operating_system": "Android 8.0+",
+        "application_category": "UtilitiesApplication",
+    },
 )
 
 
