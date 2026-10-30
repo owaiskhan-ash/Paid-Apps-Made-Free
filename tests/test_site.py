@@ -24,6 +24,11 @@ RELEASES_02 = "https://github.com/owaiskhan-ash/Progress-Tracker/releases/latest
 ASSET_02 = "Project-Tracker.apk"
 DOWNLOAD_02 = f"{RELEASES_02}/download/{ASSET_02}"
 
+# 03 Teal: per-ABI debug builds whose asset names carry the release tag
+RELEASES_03 = "https://github.com/owaiskhan-ash/Video-Downloader/releases/latest"
+ASSET_03 = "teal-v0.3.0-arm64-v8a-debug.apk"
+DOWNLOAD_03 = f"{RELEASES_03}/download/{ASSET_03}"
+
 
 class PageParser(HTMLParser):
     def __init__(self):
@@ -103,7 +108,7 @@ class LandingPageTests(unittest.TestCase):
     def test_slides_are_numbered_and_show_one_app_each(self):
         headlines = re.findall(r"<h1[^>]*>(.*?)</h1>", self.html, flags=re.DOTALL)
         texts = [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", text)).strip() for text in headlines]
-        self.assertEqual(texts, ["01 AutoWall", "02 Progress Tracker", "03 Dummy App"])
+        self.assertEqual(texts, ["01 AutoWall", "02 Progress Tracker", "03 Teal"])
 
         slide_ids = re.findall(r'<section class="slide[^"]*" id="(app-\d+)"', self.html)
         self.assertEqual(slide_ids, ["app-01", "app-02", "app-03"])
@@ -232,16 +237,17 @@ class LandingPageTests(unittest.TestCase):
             self.assertTrue((ROOT / src.lstrip("/")).exists(), f"Missing manifest icon: {src}")
 
     def test_download_buttons_target_the_latest_release_apk_for_every_app(self):
-        for download, releases in ((DOWNLOAD_01, RELEASES_01), (DOWNLOAD_02, RELEASES_02)):
+        pairs = ((DOWNLOAD_01, RELEASES_01), (DOWNLOAD_02, RELEASES_02), (DOWNLOAD_03, RELEASES_03))
+        for download, releases in pairs:
             self.assertIn(f'href="{download}"', self.html)
             self.assertIn(f'href="{releases}"', self.html)
         self.assertIn("Download", self.visible_text)
         downloads = [href for href in self.parser.links if "/releases/" in href]
-        self.assertEqual(downloads, [DOWNLOAD_01, RELEASES_01, DOWNLOAD_02, RELEASES_02])
+        self.assertEqual(downloads, [url for pair in pairs for url in pair])
         self.assertIn('rel="noopener"', self.html)
         self.assertIn('target="_blank"', self.html)
 
-    def test_structured_data_covers_the_organization_and_both_apps(self):
+    def test_structured_data_covers_the_organization_and_every_app(self):
         graph = self.schema["@graph"]
         graph_types = {item["@type"] for item in graph}
         self.assertTrue({"Organization", "WebSite", "WebPage", "SoftwareApplication"}.issubset(graph_types))
@@ -250,8 +256,15 @@ class LandingPageTests(unittest.TestCase):
         self.assertEqual(org["logo"]["url"], f"{CANONICAL}assets/icon-512x512.png")
 
         apps = [item for item in graph if item["@type"] == "SoftwareApplication"]
-        self.assertEqual(len(apps), 2, "One SoftwareApplication entry per app")
-        for app, download, releases in ((apps[0], DOWNLOAD_01, RELEASES_01), (apps[1], DOWNLOAD_02, RELEASES_02)):
+        self.assertEqual(len(apps), 3, "One SoftwareApplication entry per app")
+        pages = [item for item in graph if item["@type"] == "WebPage"]
+        self.assertEqual(len(pages), 3, "One WebPage entry per app")
+        triples = (
+            (apps[0], DOWNLOAD_01, RELEASES_01),
+            (apps[1], DOWNLOAD_02, RELEASES_02),
+            (apps[2], DOWNLOAD_03, RELEASES_03),
+        )
+        for app, download, releases in triples:
             self.assertEqual(app["downloadUrl"], download)
             self.assertEqual(app["installUrl"], releases)
             self.assertEqual(app["offers"]["price"], "0")
@@ -331,6 +344,7 @@ class ReleaseSyncTests(unittest.TestCase):
         cls.html = (ROOT / "index.html").read_text(encoding="utf-8")
         cls.autowall = cls.sync.APPS[0]
         cls.progress = cls.sync.APPS[1]
+        cls.teal = cls.sync.APPS[2]
 
     @staticmethod
     def release(tag, *names):
@@ -393,9 +407,60 @@ class ReleaseSyncTests(unittest.TestCase):
         self.assertIn('"installUrl": "' + RELEASES_02 + '"', rewritten)
         self.assertIn("v2.2.2", rewritten)
         self.assertNotIn("v1.1.8", rewritten)
-        # The first and dummy third slides are untouched.
+        # The first and third slides are untouched.
         self.assertIn("v1.3.0", rewritten)
-        self.assertIn("03</span> Dummy App", rewritten)
+        self.assertIn("03</span> Teal", rewritten)
+        self.assertIn(ASSET_03, rewritten)
+
+    def test_teal_always_resolves_to_the_arm64_build(self):
+        # GitHub returns assets in upload order, which is not guaranteed to put the
+        # phone build first: pick by ABI, never by position.
+        latest = self.sync.describe(
+            self.teal,
+            self.release(
+                "v0.4.0",
+                "teal-v0.4.0-x86_64-debug.apk",
+                "teal-v0.4.0-armeabi-v7a-debug.apk",
+                "teal-v0.4.0-arm64-v8a-debug.apk",
+            ),
+        )
+        self.assertEqual(latest["asset"], "teal-v0.4.0-arm64-v8a-debug.apk")
+        self.assertEqual(latest["download"], RELEASES_03 + "/download/teal-v0.4.0-arm64-v8a-debug.apk")
+
+    def test_teal_prefers_a_versionless_asset_name_when_the_app_publishes_one(self):
+        chosen = self.sync.choose_apk(
+            self.release("v0.5.0", "teal-v0.5.0-arm64-v8a-debug.apk", "teal-arm64-v8a.apk"),
+            self.teal["preferred"],
+            self.teal["abi"],
+        )
+        self.assertEqual(chosen["name"], "teal-arm64-v8a.apk")
+
+    def test_teal_falls_back_to_whatever_apk_a_renamed_release_ships(self):
+        chosen = self.sync.choose_apk(
+            self.release("v0.6.0", "teal-universal-debug.apk"),
+            self.teal["preferred"],
+            self.teal["abi"],
+        )
+        self.assertEqual(chosen["name"], "teal-universal-debug.apk")
+
+    def test_rewrite_repins_the_third_app_when_the_tag_changes(self):
+        latest = self.sync.describe(
+            self.teal,
+            self.release(
+                "v0.4.0",
+                "teal-v0.4.0-arm64-v8a-debug.apk",
+                "teal-v0.4.0-armeabi-v7a-debug.apk",
+                "teal-v0.4.0-x86_64-debug.apk",
+            ),
+        )
+        rewritten = self.sync.rewrite(self.html, self.teal, latest)
+        self.assertIn('href="' + RELEASES_03 + '/download/teal-v0.4.0-arm64-v8a-debug.apk"', rewritten)
+        self.assertIn('"downloadUrl": "' + RELEASES_03 + '/download/teal-v0.4.0-arm64-v8a-debug.apk"', rewritten)
+        self.assertIn('"installUrl": "' + RELEASES_03 + '"', rewritten)
+        self.assertIn("v0.4.0", rewritten)
+        self.assertNotIn(ASSET_03, rewritten, "The old tag-stamped filename must be gone")
+        self.assertIn("v1.3.0", rewritten, "The first slide is untouched")
+        self.assertEqual(self.sync.rewrite(rewritten, self.teal, latest), rewritten, "rewrite should be idempotent")
 
     def test_asset_rename_is_carried_into_the_page(self):
         latest = self.sync.describe(self.autowall, self.release("v8.0.0", "AutoWall-v8.apk"))
@@ -492,6 +557,9 @@ class ReleaseSyncTests(unittest.TestCase):
         self.assertIn("--check", workflow)
         self.assertIn("--verify", workflow, "CI must prove the latest aliases resolve before committing")
         self.assertIn("schedule:", workflow)
+        # Teal renames its APK on every tag, so a stale pinned filename must be
+        # corrected in minutes, not at the next nightly run.
+        self.assertIn('cron: "*/15 * * * *"', workflow, "The sync must run more often than daily")
         self.assertIn("contents: write", workflow)
         self.assertIn('["apps"]', workflow)
 
