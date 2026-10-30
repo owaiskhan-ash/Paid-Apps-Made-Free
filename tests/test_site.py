@@ -646,9 +646,13 @@ class ReleaseSyncTests(unittest.TestCase):
         self.assertIn("--check", workflow)
         self.assertIn("--verify", workflow, "CI must prove the latest aliases resolve before committing")
         self.assertIn("schedule:", workflow)
-        # Teal renames its APK on every tag, so a stale pinned filename must be
-        # corrected in minutes, not at the next nightly run.
+        # Teal and Faster Downloads rename their APKs on every tag, so a stale pinned
+        # filename must be corrected in minutes, not at the next nightly run.
         self.assertIn('cron: "*/15 * * * *"', workflow, "The sync must run more often than daily")
+        # A merge must also re-check the links, so drift is caught even if the
+        # scheduler is late or paused.
+        self.assertIn("push:", workflow, "The sync must run on every merge to main")
+        self.assertIn("branches: [main]", workflow)
         self.assertIn("contents: write", workflow)
         self.assertIn('["apps"]', workflow)
 
