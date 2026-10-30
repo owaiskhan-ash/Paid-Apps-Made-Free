@@ -14,7 +14,7 @@ It reads each app's GitHub release API, picks the installable APK, then
 rewrites the slide (download button, release-notes button, caption) and the
 JSON-LD entry so everything names the same, currently-latest release.
 
-Some apps stamp the version into the asset name (``teal-v0.3.0-arm64-v8a-debug.apk``)
+Some apps stamp the version into the asset name (``teal-v0.4.0-arm64-v8a.apk``)
 and ship one APK per ABI. Those entries set ``abi`` so the newest release always
 yields the same architecture, and the scheduled workflow re-pins the name often
 enough that the button keeps resolving after every tag.
@@ -78,9 +78,9 @@ APPS = (
         "id": "app-03",
         "owner": "owaiskhan-ash",
         "repo": "Video-Downloader",
-        # Teal ships one debug APK per ABI, and every asset name carries the tag,
-        # so the name has to be re-pinned for each release. ABI first, then the
-        # stable name if the app repo ever publishes one.
+        # Teal ships one APK per ABI, and every asset name carries the tag, so the
+        # name has to be re-pinned for each release. ABI first, then the stable
+        # name if the app repo ever publishes one.
         "preferred": ("teal-arm64-v8a.apk",),
         "abi": "arm64-v8a",
         "operating_system": "Android 7.0+",

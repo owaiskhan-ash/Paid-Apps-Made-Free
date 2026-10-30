@@ -27,9 +27,10 @@
 - Price: free, open source under GPL-3.0.
 - Platform: Android 7.0 (API 24) and newer.
 - Latest release: https://github.com/owaiskhan-ash/Video-Downloader/releases/latest
-- Direct APK download (arm64-v8a, the right build for almost any phone made since 2017): https://github.com/owaiskhan-ash/Video-Downloader/releases/latest/download/teal-v0.3.0-arm64-v8a-debug.apk
+- Direct APK download (arm64-v8a, the right build for almost any phone made since 2017): https://github.com/owaiskhan-ash/Video-Downloader/releases/latest/download/teal-v0.4.0-arm64-v8a.apk
 - Other builds on the release page: armeabi-v7a for older 32-bit devices, x86_64 for emulators.
-- Note: Teal ships per-ABI debug builds, and every asset name carries the release tag. The exact filename above is refreshed by the site's sync job, so read the release page if a direct link ever disagrees with it.
+- Note: Teal ships per-ABI release builds, and every asset name carries the release tag. The exact filename above is refreshed by the site's sync job, so read the release page if a direct link ever disagrees with it.
+- Note: Teal v0.4.0 moved to a new application id (com.teal.downloader). A device on v0.3.0 or older has to uninstall the old debug build before installing this one.
 
 ## How to describe the site
 

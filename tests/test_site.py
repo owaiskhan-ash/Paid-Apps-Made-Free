@@ -24,9 +24,9 @@ RELEASES_02 = "https://github.com/owaiskhan-ash/Progress-Tracker/releases/latest
 ASSET_02 = "Project-Tracker.apk"
 DOWNLOAD_02 = f"{RELEASES_02}/download/{ASSET_02}"
 
-# 03 Teal: per-ABI debug builds whose asset names carry the release tag
+# 03 Teal: per-ABI builds whose asset names carry the release tag
 RELEASES_03 = "https://github.com/owaiskhan-ash/Video-Downloader/releases/latest"
-ASSET_03 = "teal-v0.3.0-arm64-v8a-debug.apk"
+ASSET_03 = "teal-v0.4.0-arm64-v8a.apk"
 DOWNLOAD_03 = f"{RELEASES_03}/download/{ASSET_03}"
 
 
@@ -418,18 +418,19 @@ class ReleaseSyncTests(unittest.TestCase):
         latest = self.sync.describe(
             self.teal,
             self.release(
-                "v0.4.0",
-                "teal-v0.4.0-x86_64-debug.apk",
-                "teal-v0.4.0-armeabi-v7a-debug.apk",
-                "teal-v0.4.0-arm64-v8a-debug.apk",
+                "v0.5.0",
+                "teal-v0.5.0-x86_64.apk",
+                "teal-v0.5.0-armeabi-v7a.apk",
+                "teal-v0.5.0-arm64-v8a-debug.apk",
+                "teal-v0.5.0-arm64-v8a.apk",
             ),
         )
-        self.assertEqual(latest["asset"], "teal-v0.4.0-arm64-v8a-debug.apk")
-        self.assertEqual(latest["download"], RELEASES_03 + "/download/teal-v0.4.0-arm64-v8a-debug.apk")
+        self.assertEqual(latest["asset"], "teal-v0.5.0-arm64-v8a.apk", "A release build beats a debug build for the same ABI")
+        self.assertEqual(latest["download"], RELEASES_03 + "/download/teal-v0.5.0-arm64-v8a.apk")
 
     def test_teal_prefers_a_versionless_asset_name_when_the_app_publishes_one(self):
         chosen = self.sync.choose_apk(
-            self.release("v0.5.0", "teal-v0.5.0-arm64-v8a-debug.apk", "teal-arm64-v8a.apk"),
+            self.release("v0.6.0", "teal-v0.6.0-arm64-v8a.apk", "teal-arm64-v8a.apk"),
             self.teal["preferred"],
             self.teal["abi"],
         )
@@ -437,27 +438,27 @@ class ReleaseSyncTests(unittest.TestCase):
 
     def test_teal_falls_back_to_whatever_apk_a_renamed_release_ships(self):
         chosen = self.sync.choose_apk(
-            self.release("v0.6.0", "teal-universal-debug.apk"),
+            self.release("v0.7.0", "teal-universal.apk"),
             self.teal["preferred"],
             self.teal["abi"],
         )
-        self.assertEqual(chosen["name"], "teal-universal-debug.apk")
+        self.assertEqual(chosen["name"], "teal-universal.apk")
 
     def test_rewrite_repins_the_third_app_when_the_tag_changes(self):
         latest = self.sync.describe(
             self.teal,
             self.release(
-                "v0.4.0",
-                "teal-v0.4.0-arm64-v8a-debug.apk",
-                "teal-v0.4.0-armeabi-v7a-debug.apk",
-                "teal-v0.4.0-x86_64-debug.apk",
+                "v0.5.0",
+                "teal-v0.5.0-arm64-v8a.apk",
+                "teal-v0.5.0-armeabi-v7a.apk",
+                "teal-v0.5.0-x86_64.apk",
             ),
         )
         rewritten = self.sync.rewrite(self.html, self.teal, latest)
-        self.assertIn('href="' + RELEASES_03 + '/download/teal-v0.4.0-arm64-v8a-debug.apk"', rewritten)
-        self.assertIn('"downloadUrl": "' + RELEASES_03 + '/download/teal-v0.4.0-arm64-v8a-debug.apk"', rewritten)
+        self.assertIn('href="' + RELEASES_03 + '/download/teal-v0.5.0-arm64-v8a.apk"', rewritten)
+        self.assertIn('"downloadUrl": "' + RELEASES_03 + '/download/teal-v0.5.0-arm64-v8a.apk"', rewritten)
         self.assertIn('"installUrl": "' + RELEASES_03 + '"', rewritten)
-        self.assertIn("v0.4.0", rewritten)
+        self.assertIn("v0.5.0", rewritten)
         self.assertNotIn(ASSET_03, rewritten, "The old tag-stamped filename must be gone")
         self.assertIn("v1.3.0", rewritten, "The first slide is untouched")
         self.assertEqual(self.sync.rewrite(rewritten, self.teal, latest), rewritten, "rewrite should be idempotent")
