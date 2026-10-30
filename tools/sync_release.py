@@ -14,6 +14,11 @@ It reads each app's GitHub release API, picks the installable APK, then
 rewrites the slide (download button, release-notes button, caption) and the
 JSON-LD entry so everything names the same, currently-latest release.
 
+Some apps stamp the version into the asset name (``teal-v0.3.0-arm64-v8a-debug.apk``)
+and ship one APK per ABI. Those entries set ``abi`` so the newest release always
+yields the same architecture, and the scheduled workflow re-pins the name often
+enough that the button keeps resolving after every tag.
+
 ``--verify`` also asks GitHub where each button's ``latest`` alias actually
 lands and fails unless it reaches the release the API just reported, so a
 button that resolves to an older tag or a renamed asset cannot ship quietly.
@@ -67,6 +72,20 @@ APPS = (
         "operating_system": "Android",
         "application_category": "ProductivityApplication",
     },
+    {
+        "num": "03",
+        "name": "Teal",
+        "id": "app-03",
+        "owner": "owaiskhan-ash",
+        "repo": "Video-Downloader",
+        # Teal ships one debug APK per ABI, and every asset name carries the tag,
+        # so the name has to be re-pinned for each release. ABI first, then the
+        # stable name if the app repo ever publishes one.
+        "preferred": ("teal-arm64-v8a.apk",),
+        "abi": "arm64-v8a",
+        "operating_system": "Android 7.0+",
+        "application_category": "MultimediaApplication",
+    },
 )
 
 
@@ -97,7 +116,14 @@ def fetch_latest_release(app: dict, timeout: float = 20.0) -> dict:
         raise ReleaseError(f"Could not read {app_api(app)}: {error}") from error
 
 
-def choose_apk(release: dict, preferred: tuple[str, ...]) -> dict:
+def choose_apk(release: dict, preferred: tuple[str, ...], abi: str | None = None) -> dict:
+    """Pick the APK a phone should install from this release.
+
+    Order: an exact preferred name, then the requested ABI (preferring a
+    non-debug build), then any non-debug APK, then whatever APK is left. The
+    last step keeps a release usable even if its naming drifts, because a
+    slightly wrong ABI is better than a button that downloads nothing.
+    """
     assets = [asset for asset in release.get("assets", []) if asset["name"].lower().endswith(".apk")]
     if not assets:
         raise ReleaseError(f"Release {release.get('tag_name')} has no .apk asset")
@@ -107,8 +133,19 @@ def choose_apk(release: dict, preferred: tuple[str, ...]) -> dict:
         if candidate in by_name:
             return by_name[candidate]
 
+    def is_debug(asset: dict) -> bool:
+        return "debug" in asset["name"].lower()
+
+    if abi:
+        matching = [asset for asset in assets if abi.lower() in asset["name"].lower()]
+        for asset in matching:
+            if not is_debug(asset):
+                return asset
+        if matching:
+            return matching[0]
+
     for asset in assets:
-        if "debug" not in asset["name"].lower():
+        if not is_debug(asset):
             return asset
     return assets[0]
 
@@ -166,7 +203,7 @@ def verify_latest_alias(app: dict, latest: dict, timeout: float = 20.0) -> None:
 
 
 def describe(app: dict, release: dict) -> dict:
-    asset = choose_apk(release, app["preferred"])
+    asset = choose_apk(release, app["preferred"], app.get("abi"))
     tag = (release.get("tag_name") or "").strip()
     if not tag:
         raise ReleaseError("Latest release has no tag name")
