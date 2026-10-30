@@ -7,7 +7,7 @@ A minimal slideshow landing page that publishes free Android apps **one slide at
 - **03 Teal** ([Teal on GitHub](https://github.com/owaiskhan-ash/Video-Downloader)), a free video and audio downloader for Android built on yt-dlp.
 - **04 Faster Downloads** ([Faster Downloads on GitHub](https://github.com/owaiskhan-ash/Faster-Downloads)), a free Android downloader that pulls one file over Wi-Fi and mobile data at the same time.
 
-Fluorescent background, hairline rules, thin type, and two outline buttons per slide: a **Download** button that always resolves to the newest APK on GitHub Releases, and a small square shortcut to the release page. Teal ships one APK per ABI, so its Download button serves the `arm64-v8a` build (the right one for almost any phone made since 2017) and the square shortcut opens the release page where the `armeabi-v7a` and `x86_64` builds sit beside it. The top bar walks the catalogue like slides, one app on screen at a time; on a phone a horizontal swipe moves to the next or previous app. The deck works with JavaScript disabled.
+Fluorescent background, hairline rules, thin type, and two outline buttons per slide: a **Download** button that always resolves to the newest APK on GitHub Releases, and a small square shortcut to the app's GitHub repository. Teal ships one APK per ABI, so its Download button serves the `arm64-v8a` build (the right one for almost any phone made since 2017); the square shortcut opens the repository, whose Releases page carries the `armeabi-v7a` and `x86_64` builds. The top bar walks the catalogue like slides, one app on screen at a time; on a phone a horizontal swipe moves to the next or previous app. The deck works with JavaScript disabled.
 
 ## Preview locally
 
@@ -27,7 +27,7 @@ Then open `http://localhost:8000`.
 - Swiping left on a phone opens the next app and swiping right returns to the previous one; only the middle `.core` elements respond to and follow the gesture while the top bar, bottom bar, and hairline frame stay completely still. At either end of the deck the middle group resists the drag and eases back instead of moving. A swipe sets the same `#app-01` to `#app-04` fragment as a nav tap, so the arrows, the URL, and the active tab always agree, and incoming middle elements enter smoothly from the side the finger pushed toward with no flicker. Horizontal gestures in the middle band belong to the deck (`touch-action: pan-y`), vertical gestures still scroll, and `prefers-reduced-motion` swaps the slide animation for an instant change.
 - Each slide's `Download` button points at `https://github.com/<owner>/<repo>/releases/latest/download/<asset>`. Because the path uses the `latest` release alias, it keeps working when a newer release is published; it never needs editing. For an app that stamps the version into its asset names, the `<asset>` half is the one part that has to move, which is what the sync below does.
 - Teal's three APKs are per-ABI release builds with the tag baked into each name (`teal-<version>-arm64-v8a.apk`). `tools/sync_release.py` therefore records an `abi` preference for it and always resolves the newest release to the `arm64-v8a` asset, so the slide never points at a 32-bit or emulator build. Faster Downloads ships one universal APK, also with the tag in its name (`FasterDownloads-<version>.apk`), so only the filename needs re-pinning there.
-- The square `↗` button on each slide opens that app's release notes page.
+- The square `↗` button on each slide opens that app's GitHub repository, not its release page: source, issues and the Releases tab live there. The release page itself is still what the JSON-LD `installUrl` names, because that is where an install happens.
 - A tiny caption under the buttons records the release each button currently resolves to. It is kept in sync automatically (see below).
 - The viewport opens with a short, reduced-motion-aware fade/rise; the hairline frame and rules stay static.
 
@@ -51,9 +51,11 @@ Three independent safeguards:
 2. **A scheduled sync keeps the visible bits honest.** `tools/sync_release.py` reads
    each app's GitHub release API, picks the installable APK (stable name first, then the
    configured ABI, never a debug build unless it is the only option), and rewrites the
-   slide's download href, release-notes href, JSON-LD `downloadUrl`/`installUrl`, and
-   caption version. It exits non-zero instead of writing anything if a lookup fails or a
-   release ships no APK, so a stale pin is never published silently.
+   slide's download href, caption version and JSON-LD `downloadUrl`/`installUrl`. The
+   square button beside the download targets the repository rather than a release, so it
+   never needs re-pinning; the sync only restores it if it drifts to a release page. It
+   exits non-zero instead of writing anything if a lookup fails or a release ships no APK,
+   so a stale pin is never published silently.
 3. **CI proves each button really reaches that release.** `--verify` asks GitHub where
    every `latest` alias actually redirects and fails unless it lands on the same tag and
    asset the API just reported, so a renamed APK or an alias still serving an older tag
