@@ -1,13 +1,18 @@
 name: Sync latest releases
 
 on:
+  # Every merge to main re-checks the links, so a release published between two
+  # scheduled runs is picked up the next time anyone touches the repository.
+  push:
+    branches: [main]
   schedule:
     # Every 15 minutes, not daily. Apps 01 and 02 name their APK after the app, so
-    # their buttons stay correct between runs; 03 Teal stamps the version into every
-    # asset name (teal-v0.4.0-arm64-v8a.apk), so its pinned filename starts
-    # 404ing the moment a tag is published. This cadence re-pins that name within
-    # minutes instead of within a day. GitHub may delay a scheduled run under load,
-    # and a push or the repository_dispatch below still refreshes it immediately.
+    # their buttons stay correct between runs; 03 Teal and 04 Faster Downloads stamp
+    # the version into every asset name (teal-<version>-arm64-v8a.apk), so their
+    # pinned filenames start 404ing the moment a tag is published. This cadence
+    # re-pins those names within minutes instead of within a day. GitHub may delay a
+    # scheduled run under load, so the push and repository_dispatch triggers exist as
+    # faster paths.
     - cron: "*/15 * * * *"
   workflow_dispatch:
   repository_dispatch:
