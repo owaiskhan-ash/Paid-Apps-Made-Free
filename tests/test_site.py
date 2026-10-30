@@ -31,7 +31,7 @@ DOWNLOAD_03 = f"{RELEASES_03}/download/{ASSET_03}"
 
 # 04 Faster Downloads: one universal APK whose name carries the release tag
 RELEASES_04 = "https://github.com/owaiskhan-ash/Faster-Downloads/releases/latest"
-ASSET_04 = "FasterDownloads-0.1.1.apk"
+ASSET_04 = "FasterDownloads-0.3.0.apk"
 DOWNLOAD_04 = f"{RELEASES_04}/download/{ASSET_04}"
 
 
@@ -491,17 +491,17 @@ class ReleaseSyncTests(unittest.TestCase):
         self.assertIn(RELEASES_01 + "/download/AutoWall-v8.apk", rewritten)
 
     def test_faster_downloads_pins_its_single_universal_apk(self):
-        latest = self.sync.describe(self.faster, self.release("v0.2.0", "FasterDownloads-0.2.0.apk"))
-        self.assertEqual(latest["asset"], "FasterDownloads-0.2.0.apk")
-        self.assertEqual(latest["download"], RELEASES_04 + "/download/FasterDownloads-0.2.0.apk")
+        latest = self.sync.describe(self.faster, self.release("v0.4.0", "FasterDownloads-0.4.0.apk"))
+        self.assertEqual(latest["asset"], "FasterDownloads-0.4.0.apk")
+        self.assertEqual(latest["download"], RELEASES_04 + "/download/FasterDownloads-0.4.0.apk")
 
     def test_rewrite_repins_the_fourth_app_when_the_tag_changes(self):
-        latest = self.sync.describe(self.faster, self.release("v0.2.0", "FasterDownloads-0.2.0.apk"))
+        latest = self.sync.describe(self.faster, self.release("v0.4.0", "FasterDownloads-0.4.0.apk"))
         rewritten = self.sync.rewrite(self.html, self.faster, latest)
-        self.assertIn('href="' + RELEASES_04 + '/download/FasterDownloads-0.2.0.apk"', rewritten)
-        self.assertIn('"downloadUrl": "' + RELEASES_04 + '/download/FasterDownloads-0.2.0.apk"', rewritten)
+        self.assertIn('href="' + RELEASES_04 + '/download/FasterDownloads-0.4.0.apk"', rewritten)
+        self.assertIn('"downloadUrl": "' + RELEASES_04 + '/download/FasterDownloads-0.4.0.apk"', rewritten)
         self.assertIn('"installUrl": "' + RELEASES_04 + '"', rewritten)
-        self.assertIn("v0.2.0", rewritten)
+        self.assertIn("v0.4.0", rewritten)
         self.assertNotIn(ASSET_04, rewritten, "The old tag-stamped filename must be gone")
         self.assertIn(ASSET_03, rewritten, "The third slide is untouched")
         self.assertEqual(self.sync.rewrite(rewritten, self.faster, latest), rewritten, "rewrite should be idempotent")
