@@ -24,15 +24,30 @@ RELEASES_02 = "https://github.com/owaiskhan-ash/Progress-Tracker/releases/latest
 ASSET_02 = "Project-Tracker.apk"
 DOWNLOAD_02 = f"{RELEASES_02}/download/{ASSET_02}"
 
-# 03 Teal: per-ABI builds whose asset names carry the release tag
+# 03 Teal and 04 Faster Downloads stamp the tag into every asset name, so their
+# exact filenames move with each release. Pin the release page and the shape, and
+# read the live filename from the page: a test that hard-codes it would fail the
+# moment the sync workflow pinned a new release, which would stop that same
+# workflow from ever committing the update.
 RELEASES_03 = "https://github.com/owaiskhan-ash/Video-Downloader/releases/latest"
-ASSET_03 = "teal-v0.4.0-arm64-v8a.apk"
-DOWNLOAD_03 = f"{RELEASES_03}/download/{ASSET_03}"
-
-# 04 Faster Downloads: one universal APK whose name carries the release tag
 RELEASES_04 = "https://github.com/owaiskhan-ash/Faster-Downloads/releases/latest"
-ASSET_04 = "FasterDownloads-0.3.0.apk"
-DOWNLOAD_04 = f"{RELEASES_04}/download/{ASSET_04}"
+
+TAG_STAMPED = (
+    ("app-03", RELEASES_03, "arm64-v8a"),
+    ("app-04", RELEASES_04, None),
+)
+
+
+def slide_block(html, slide_id):
+    return re.search(
+        r'<section[^>]*id="%s"[^>]*>.*?</section>' % re.escape(slide_id),
+        html,
+        flags=re.DOTALL,
+    ).group(0)
+
+
+def slide_download(html, slide_id):
+    return re.search(r'class="btn btn-primary" href="([^"]+)"', slide_block(html, slide_id)).group(1)
 
 
 class PageParser(HTMLParser):
@@ -251,20 +266,44 @@ class LandingPageTests(unittest.TestCase):
             self.assertTrue((ROOT / src.lstrip("/")).exists(), f"Missing manifest icon: {src}")
 
     def test_download_buttons_target_the_latest_release_apk_for_every_app(self):
-        pairs = (
-            (DOWNLOAD_01, RELEASES_01),
-            (DOWNLOAD_02, RELEASES_02),
-            (DOWNLOAD_03, RELEASES_03),
-            (DOWNLOAD_04, RELEASES_04),
-        )
-        for download, releases in pairs:
+        # Stable asset names: these two URLs must never change.
+        for download, releases in ((DOWNLOAD_01, RELEASES_01), (DOWNLOAD_02, RELEASES_02)):
             self.assertIn(f'href="{download}"', self.html)
             self.assertIn(f'href="{releases}"', self.html)
         self.assertIn("Download", self.visible_text)
-        downloads = [href for href in self.parser.links if "/releases/" in href]
-        self.assertEqual(downloads, [url for pair in pairs for url in pair])
+
+        # Two buttons per app, in slide order, all on the versionless alias.
+        links = [href for href in self.parser.links if "/releases/" in href]
+        self.assertEqual(len(links), 8, "One download and one release link per app")
+        self.assertEqual(links[0::2][0], DOWNLOAD_01)
+        self.assertEqual(links[0::2][1], DOWNLOAD_02)
+        self.assertEqual(links[1::2], [RELEASES_01, RELEASES_02, RELEASES_03, RELEASES_04])
+        for href in links[0::2]:
+            self.assertIn("/releases/latest/download/", href)
+            self.assertTrue(href.endswith(".apk"))
         self.assertIn('rel="noopener"', self.html)
         self.assertIn('target="_blank"', self.html)
+
+    def test_tag_stamped_downloads_follow_their_newest_tag(self):
+        # The button, the caption and the structured data must name one release,
+        # whatever tag the sync last pinned. Nothing here hard-codes a version.
+        for slide_id, releases, abi in TAG_STAMPED:
+            block = slide_block(self.html, slide_id)
+            href = slide_download(self.html, slide_id)
+            self.assertTrue(href.startswith(f"{releases}/download/"), f"{slide_id} must use the latest alias")
+
+            asset = href.rsplit("/", 1)[1]
+            self.assertTrue(asset.endswith(".apk"))
+            if abi:
+                self.assertIn(abi, asset, f"{slide_id} must serve the {abi} build")
+
+            version = re.search(r"\d+\.\d+(?:\.\d+)?", asset).group(0)
+            caption = re.search(r'<p class="caption">.*?(v\d+\.\d+(?:\.\d+)?)', block, flags=re.DOTALL).group(1)
+            self.assertEqual(caption, f"v{version}", "The caption must name the tag inside the pinned filename")
+
+            self.assertIn(f'href="{releases}"', block, "The square button opens the release page")
+            self.assertIn(f'"downloadUrl": "{href}"', self.html, "JSON-LD must name the same APK")
+            self.assertIn(f'"installUrl": "{releases}"', self.html)
 
     def test_structured_data_covers_the_organization_and_every_app(self):
         graph = self.schema["@graph"]
@@ -278,15 +317,19 @@ class LandingPageTests(unittest.TestCase):
         self.assertEqual(len(apps), 4, "One SoftwareApplication entry per app")
         pages = [item for item in graph if item["@type"] == "WebPage"]
         self.assertEqual(len(pages), 4, "One WebPage entry per app")
-        triples = (
-            (apps[0], DOWNLOAD_01, RELEASES_01),
-            (apps[1], DOWNLOAD_02, RELEASES_02),
-            (apps[2], DOWNLOAD_03, RELEASES_03),
-            (apps[3], DOWNLOAD_04, RELEASES_04),
-        )
-        for app, download, releases in triples:
-            self.assertEqual(app["downloadUrl"], download)
-            self.assertEqual(app["installUrl"], releases)
+
+        expected = {
+            "app-01": (DOWNLOAD_01, RELEASES_01),
+            "app-02": (DOWNLOAD_02, RELEASES_02),
+            "app-03": (slide_download(self.html, "app-03"), RELEASES_03),
+            "app-04": (slide_download(self.html, "app-04"), RELEASES_04),
+        }
+        by_id = {app["@id"].rsplit("#", 1)[1]: app for app in apps}
+        self.assertEqual(set(by_id), set(expected))
+        for app_id, (download, releases) in expected.items():
+            self.assertEqual(by_id[app_id]["downloadUrl"], download, f"{app_id} downloadUrl must match its button")
+            self.assertEqual(by_id[app_id]["installUrl"], releases)
+        for app in apps:
             self.assertEqual(app["offers"]["price"], "0")
             self.assertEqual(app["image"], f"{CANONICAL}assets/icon-512x512.png")
 
@@ -366,6 +409,8 @@ class ReleaseSyncTests(unittest.TestCase):
         cls.progress = cls.sync.APPS[1]
         cls.teal = cls.sync.APPS[2]
         cls.faster = cls.sync.APPS[3]
+        # What the page currently pins, so a test never depends on one release.
+        cls.pinned = {entry["num"]: entry for entry in cls.sync.current_pins(cls.html)["apps"]}
 
     @staticmethod
     def release(tag, *names):
@@ -375,8 +420,13 @@ class ReleaseSyncTests(unittest.TestCase):
         }
 
     def test_every_button_is_pinned_to_the_mutable_latest_alias(self):
-        pinned = {entry["num"]: entry for entry in self.sync.current_pins(self.html)["apps"]}
-        for app, base in ((self.autowall, RELEASES_01), (self.progress, RELEASES_02)):
+        pinned = self.pinned
+        for app, base in (
+            (self.autowall, RELEASES_01),
+            (self.progress, RELEASES_02),
+            (self.teal, RELEASES_03),
+            (self.faster, RELEASES_04),
+        ):
             self.assertTrue(
                 pinned[app["num"]]["download"].startswith(base + "/download/"),
                 "The download button must use /releases/latest/download/, never a versioned URL",
@@ -431,8 +481,8 @@ class ReleaseSyncTests(unittest.TestCase):
         # The first, third and fourth slides are untouched.
         self.assertIn("v1.3.0", rewritten)
         self.assertIn("03</span> Teal", rewritten)
-        self.assertIn(ASSET_03, rewritten)
-        self.assertIn(ASSET_04, rewritten)
+        self.assertIn(self.pinned["03"]["download"], rewritten)
+        self.assertIn(self.pinned["04"]["download"], rewritten)
 
     def test_teal_always_resolves_to_the_arm64_build(self):
         # GitHub returns assets in upload order, which is not guaranteed to put the
@@ -470,18 +520,18 @@ class ReleaseSyncTests(unittest.TestCase):
         latest = self.sync.describe(
             self.teal,
             self.release(
-                "v0.5.0",
-                "teal-v0.5.0-arm64-v8a.apk",
-                "teal-v0.5.0-armeabi-v7a.apk",
-                "teal-v0.5.0-x86_64.apk",
+                "v99.0.0",
+                "teal-v99.0.0-arm64-v8a.apk",
+                "teal-v99.0.0-armeabi-v7a.apk",
+                "teal-v99.0.0-x86_64.apk",
             ),
         )
         rewritten = self.sync.rewrite(self.html, self.teal, latest)
-        self.assertIn('href="' + RELEASES_03 + '/download/teal-v0.5.0-arm64-v8a.apk"', rewritten)
-        self.assertIn('"downloadUrl": "' + RELEASES_03 + '/download/teal-v0.5.0-arm64-v8a.apk"', rewritten)
+        self.assertIn('href="' + RELEASES_03 + '/download/teal-v99.0.0-arm64-v8a.apk"', rewritten)
+        self.assertIn('"downloadUrl": "' + RELEASES_03 + '/download/teal-v99.0.0-arm64-v8a.apk"', rewritten)
         self.assertIn('"installUrl": "' + RELEASES_03 + '"', rewritten)
-        self.assertIn("v0.5.0", rewritten)
-        self.assertNotIn(ASSET_03, rewritten, "The old tag-stamped filename must be gone")
+        self.assertIn("v99.0.0", rewritten)
+        self.assertNotIn(self.pinned["03"]["download"], rewritten, "The old tag-stamped filename must be gone")
         self.assertIn("v1.3.0", rewritten, "The first slide is untouched")
         self.assertEqual(self.sync.rewrite(rewritten, self.teal, latest), rewritten, "rewrite should be idempotent")
 
@@ -491,19 +541,19 @@ class ReleaseSyncTests(unittest.TestCase):
         self.assertIn(RELEASES_01 + "/download/AutoWall-v8.apk", rewritten)
 
     def test_faster_downloads_pins_its_single_universal_apk(self):
-        latest = self.sync.describe(self.faster, self.release("v0.4.0", "FasterDownloads-0.4.0.apk"))
-        self.assertEqual(latest["asset"], "FasterDownloads-0.4.0.apk")
-        self.assertEqual(latest["download"], RELEASES_04 + "/download/FasterDownloads-0.4.0.apk")
+        latest = self.sync.describe(self.faster, self.release("v99.0.0", "FasterDownloads-99.0.0.apk"))
+        self.assertEqual(latest["asset"], "FasterDownloads-99.0.0.apk")
+        self.assertEqual(latest["download"], RELEASES_04 + "/download/FasterDownloads-99.0.0.apk")
 
     def test_rewrite_repins_the_fourth_app_when_the_tag_changes(self):
-        latest = self.sync.describe(self.faster, self.release("v0.4.0", "FasterDownloads-0.4.0.apk"))
+        latest = self.sync.describe(self.faster, self.release("v99.0.0", "FasterDownloads-99.0.0.apk"))
         rewritten = self.sync.rewrite(self.html, self.faster, latest)
-        self.assertIn('href="' + RELEASES_04 + '/download/FasterDownloads-0.4.0.apk"', rewritten)
-        self.assertIn('"downloadUrl": "' + RELEASES_04 + '/download/FasterDownloads-0.4.0.apk"', rewritten)
+        self.assertIn('href="' + RELEASES_04 + '/download/FasterDownloads-99.0.0.apk"', rewritten)
+        self.assertIn('"downloadUrl": "' + RELEASES_04 + '/download/FasterDownloads-99.0.0.apk"', rewritten)
         self.assertIn('"installUrl": "' + RELEASES_04 + '"', rewritten)
-        self.assertIn("v0.4.0", rewritten)
-        self.assertNotIn(ASSET_04, rewritten, "The old tag-stamped filename must be gone")
-        self.assertIn(ASSET_03, rewritten, "The third slide is untouched")
+        self.assertIn("v99.0.0", rewritten)
+        self.assertNotIn(self.pinned["04"]["download"], rewritten, "The old tag-stamped filename must be gone")
+        self.assertIn(self.pinned["03"]["download"], rewritten, "The third slide is untouched")
         self.assertEqual(self.sync.rewrite(rewritten, self.faster, latest), rewritten, "rewrite should be idempotent")
 
     def test_a_release_without_an_apk_fails_loudly_instead_of_shipping_a_stale_pin(self):

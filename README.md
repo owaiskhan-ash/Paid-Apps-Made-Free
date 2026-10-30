@@ -26,7 +26,7 @@ Then open `http://localhost:8000`.
 - `FREE` sits in the top-right bar with no icon box on the page itself.
 - Swiping left on a phone opens the next app and swiping right returns to the previous one; only the middle `.core` elements respond to and follow the gesture while the top bar, bottom bar, and hairline frame stay completely still. At either end of the deck the middle group resists the drag and eases back instead of moving. A swipe sets the same `#app-01` to `#app-04` fragment as a nav tap, so the arrows, the URL, and the active tab always agree, and incoming middle elements enter smoothly from the side the finger pushed toward with no flicker. Horizontal gestures in the middle band belong to the deck (`touch-action: pan-y`), vertical gestures still scroll, and `prefers-reduced-motion` swaps the slide animation for an instant change.
 - Each slide's `Download` button points at `https://github.com/<owner>/<repo>/releases/latest/download/<asset>`. Because the path uses the `latest` release alias, it keeps working when a newer release is published; it never needs editing. For an app that stamps the version into its asset names, the `<asset>` half is the one part that has to move, which is what the sync below does.
-- Teal's three APKs are per-ABI release builds with the tag baked into each name (`teal-v0.4.0-arm64-v8a.apk`). `tools/sync_release.py` therefore records an `abi` preference for it and always resolves the newest release to the `arm64-v8a` asset, so the slide never points at a 32-bit or emulator build. Faster Downloads ships one universal APK, also with the tag in its name (`FasterDownloads-0.3.0.apk`), so only the filename needs re-pinning there.
+- Teal's three APKs are per-ABI release builds with the tag baked into each name (`teal-<version>-arm64-v8a.apk`). `tools/sync_release.py` therefore records an `abi` preference for it and always resolves the newest release to the `arm64-v8a` asset, so the slide never points at a 32-bit or emulator build. Faster Downloads ships one universal APK, also with the tag in its name (`FasterDownloads-<version>.apk`), so only the filename needs re-pinning there.
 - The square `↗` button on each slide opens that app's release notes page.
 - A tiny caption under the buttons records the release each button currently resolves to. It is kept in sync automatically (see below).
 - The viewport opens with a short, reduced-motion-aware fade/rise; the hairline frame and rules stay static.
@@ -58,6 +58,12 @@ Three independent safeguards:
    every `latest` alias actually redirects and fails unless it lands on the same tag and
    asset the API just reported, so a renamed APK or an alias still serving an older tag
    stops the workflow before it commits.
+
+The tests read the pinned filenames out of the page instead of hard-coding a version,
+and check that the button, the caption and the JSON-LD agree on one tag. That matters
+because the sync workflow runs the suite before it commits: a test that expected
+`teal-v0.4.0-arm64-v8a.apk` would fail the moment a newer release was pinned, and the
+workflow would then never be able to publish the update it had just computed.
 
 `.github/workflows/sync-release.yml` runs that script every 15 minutes, on manual
 dispatch, and on a `repository_dispatch` of type `app-release`, then re-checks the
