@@ -93,7 +93,7 @@ APPS = (
         "owner": "owaiskhan-ash",
         "repo": "Faster-Downloads",
         # One universal APK, but its name still carries the tag
-        # (FasterDownloads-0.1.1.apk), so the same re-pinning applies.
+        # (FasterDownloads-0.3.0.apk), so the same re-pinning applies.
         "preferred": ("FasterDownloads.apk",),
         "operating_system": "Android 8.0+",
         "application_category": "UtilitiesApplication",

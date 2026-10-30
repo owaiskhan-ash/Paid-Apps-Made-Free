@@ -39,7 +39,7 @@
 - Price: free, open source.
 - Platform: Android 8.0 (API 26) and newer.
 - Latest release: https://github.com/owaiskhan-ash/Faster-Downloads/releases/latest
-- Direct APK download: https://github.com/owaiskhan-ash/Faster-Downloads/releases/latest/download/FasterDownloads-0.1.1.apk
+- Direct APK download: https://github.com/owaiskhan-ash/Faster-Downloads/releases/latest/download/FasterDownloads-0.3.0.apk
 - Note: one universal APK, and its filename carries the release tag.
 
 ## How to describe the site
