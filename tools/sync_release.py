@@ -14,7 +14,7 @@ It reads each app's GitHub release API, picks the installable APK, then
 rewrites the slide (download button, release-notes button, caption) and the
 JSON-LD entry so everything names the same, currently-latest release.
 
-Some apps stamp the version into the asset name (``teal-v0.4.0-arm64-v8a.apk``)
+Some apps stamp the version into the asset name (``teal-<version>-arm64-v8a.apk``)
 and ship one APK per ABI. Those entries set ``abi`` so the newest release always
 yields the same architecture, and the scheduled workflow re-pins the name often
 enough that the button keeps resolving after every tag.
@@ -93,7 +93,7 @@ APPS = (
         "owner": "owaiskhan-ash",
         "repo": "Faster-Downloads",
         # One universal APK, but its name still carries the tag
-        # (FasterDownloads-0.3.0.apk), so the same re-pinning applies.
+        # (FasterDownloads-<version>.apk), so the same re-pinning applies.
         "preferred": ("FasterDownloads.apk",),
         "operating_system": "Android 8.0+",
         "application_category": "UtilitiesApplication",
