@@ -295,6 +295,21 @@ a:focus-visible {
   opacity: 0.55;
 }
 
+/* One line under the app name saying what the app does. Kept short (ten words at
+   most) and unwrapped, so it reads as a subtitle rather than a paragraph. */
+.tagline {
+  max-width: 100%;
+  margin: 0;
+  font-size: clamp(0.62rem, 2.2vw, 0.75rem);
+  font-weight: 300;
+  letter-spacing: 0.03em;
+  line-height: 1.4;
+  /* Pull it closer to the app name so it reads as a subtitle, not a sibling. */
+  margin-top: -0.55rem;
+  opacity: 0.78;
+  white-space: nowrap;
+}
+
 .actions {
   display: flex;
   align-items: stretch;
@@ -410,6 +425,7 @@ a:focus-visible {
 /* Staggered rise runs only on the initial landing view; switching slides never
    fades the bottom bar or blanks out the buttons and caption. */
 .deck:not(:has(.slide:target)):not(.has-interacted) .app-code,
+.deck:not(:has(.slide:target)):not(.has-interacted) .tagline,
 .deck:not(:has(.slide:target)):not(.has-interacted) .caption,
 .deck:not(:has(.slide:target)):not(.has-interacted) .bar-bottom {
   animation: rise 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
@@ -433,6 +449,7 @@ a:focus-visible {
   .hairlines,
   .bar-top,
   .deck:not(:has(.slide:target)):not(.has-interacted) .app-code,
+  .deck:not(:has(.slide:target)):not(.has-interacted) .tagline,
   .deck:not(:has(.slide:target)):not(.has-interacted) .actions,
   .deck:not(:has(.slide:target)):not(.has-interacted) .caption,
   .deck:not(:has(.slide:target)):not(.has-interacted) .bar-bottom,

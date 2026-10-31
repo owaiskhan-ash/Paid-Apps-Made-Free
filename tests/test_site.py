@@ -140,6 +140,37 @@ class LandingPageTests(unittest.TestCase):
         self.assertEqual(slide_ids, ["app-01", "app-02", "app-03", "app-04"])
         self.assertEqual(self.parser.images, [], "The minimal slides use no raster imagery")
 
+    def test_every_slide_has_one_short_tagline(self):
+        seen = []
+        for slide_id in ("app-01", "app-02", "app-03", "app-04"):
+            block = re.search(
+                r'<section[^>]*id="%s".*?</section>' % slide_id, self.html, flags=re.DOTALL
+            ).group(0)
+            found = re.findall(r'<p class="tagline">(.*?)</p>', block, flags=re.DOTALL)
+            self.assertEqual(len(found), 1, f"{slide_id} needs exactly one tagline")
+
+            raw = found[0]
+            self.assertNotIn("\n", raw, "The tagline must sit on a single line in the markup")
+            self.assertNotRegex(raw, r"<", "The tagline is plain text, not markup")
+            text = raw.strip()
+            self.assertTrue(text, f"{slide_id} tagline is empty")
+            words = text.split()
+            self.assertLessEqual(len(words), 10, f"{slide_id} tagline has {len(words)} words: {text}")
+            self.assertGreaterEqual(len(words), 3, f"{slide_id} tagline is too terse to explain the app")
+            self.assertLess(
+                block.index('class="tagline"'),
+                block.index('class="actions"'),
+                "The tagline belongs under the app name, above the buttons",
+            )
+            seen.append(text)
+
+        self.assertEqual(len(set(seen)), 4, "Each app needs its own tagline")
+
+        css = (ROOT / "styles.css").read_text(encoding="utf-8")
+        tagline_block = re.search(r"\.tagline\s*\{([^}]*)\}", css, flags=re.DOTALL).group(1)
+        self.assertIn("white-space: nowrap", tagline_block, "The tagline must render on one line")
+        self.assertIn(".deck:not(:has(.slide:target)):not(.has-interacted) .tagline", css)
+
     def test_top_bar_shows_navigation_and_free_on_right_without_box(self):
         top_bar = re.search(r'<header class="bar bar-top">(.*?)</header>', self.html, flags=re.DOTALL).group(1)
         self.assertNotIn('class="mark"', top_bar)
