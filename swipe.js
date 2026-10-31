@@ -1,8 +1,9 @@
-/* Mobile swipe navigation for the app deck.
+/* Deck navigation for the app deck: mobile swipe, keyboard, trackpad, and a
+   download-intent warmup.
    Progressive enhancement only: only the middle (.core) elements respond to and
-   move with the gesture while the top bar, bottom bar, and hairlines remain
-   stationary. Without this file the top-bar arrows and the #app-01 / #app-02 /
-   #app-04 fragments still move between slides. */
+   move with a drag while the top bar, bottom bar, and hairlines remain
+   stationary. Without this file the top-bar arrows and the #app-01 to #app-04
+   fragments still move between slides. */
 (function () {
   "use strict";
 
@@ -20,7 +21,7 @@
 
   var deck = document.querySelector(".deck");
   var stage = document.querySelector(".stage");
-  if (!deck || !stage || !window.PointerEvent) {
+  if (!deck || !stage) {
     return;
   }
 
@@ -167,6 +168,119 @@
     var label = heading ? heading.textContent.replace(/\s+/g, " ").trim() : "";
     status.textContent = "App " + (index + 1) + " of " + slides.length + (label ? ": " + label : "");
   }
+
+  // A tab tap and the keys below should behave identically: change the fragment
+  // and let the existing :target CSS own visibility, the active tab and the arrows.
+  function navigate(to) {
+    var from = currentIndex();
+    if (to < 0 || to >= slides.length || to === from) {
+      return false;
+    }
+    deck.classList.add("has-interacted");
+    resetCore(cores[from]);
+    cores[from].classList.remove("swipe-in-next", "swipe-in-prev", "is-settled");
+    resetCore(cores[to]);
+    cores[to].classList.remove("swipe-in-next", "swipe-in-prev");
+    window.location.hash = "#" + slides[to].id;
+    announce(to);
+    return true;
+  }
+
+  function isTextEntry(target) {
+    if (!target || !target.tagName) {
+      return false;
+    }
+    var tag = target.tagName.toLowerCase();
+    return tag === "input" || tag === "textarea" || tag === "select" || target.isContentEditable === true;
+  }
+
+  function onKeyDown(event) {
+    // Leave browser and OS shortcuts, and any text field, entirely alone.
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || isTextEntry(event.target)) {
+      return;
+    }
+    var moved = false;
+    if (event.key === "ArrowRight") {
+      moved = navigate(currentIndex() + 1);
+    } else if (event.key === "ArrowLeft") {
+      moved = navigate(currentIndex() - 1);
+    } else if (event.key === "Home") {
+      moved = navigate(0);
+    } else if (event.key === "End") {
+      moved = navigate(slides.length - 1);
+    }
+    if (moved) {
+      event.preventDefault();
+    }
+  }
+
+  var WHEEL_COMMIT = 40; // px of horizontal travel that commits a trackpad swipe
+  var WHEEL_COOLDOWN = 450; // ms, so one gesture cannot skip several apps
+  var WHEEL_RESET_MS = 180; // quiet time that ends a gesture
+  var wheelTravel = 0;
+  var wheelResetTimer = 0;
+  var lastWheelSlide = 0;
+
+  function onWheel(event) {
+    if (event.ctrlKey) {
+      return; // pinch-zoom, not a swipe
+    }
+    var dx = event.deltaX;
+    if (event.deltaMode === 1) {
+      dx *= 16; // lines
+    } else if (event.deltaMode === 2) {
+      dx *= coreWidth(); // pages
+    }
+    // Vertical scrolling keeps the page; only a clearly horizontal gesture counts.
+    if (Math.abs(dx) < 1 || Math.abs(dx) < Math.abs(event.deltaY)) {
+      return;
+    }
+    var now = event.timeStamp || Date.now();
+    if (now - lastWheelSlide < WHEEL_COOLDOWN) {
+      return;
+    }
+    wheelTravel += dx;
+    window.clearTimeout(wheelResetTimer);
+    wheelResetTimer = window.setTimeout(function () {
+      wheelTravel = 0;
+    }, WHEEL_RESET_MS);
+    if (Math.abs(wheelTravel) < WHEEL_COMMIT) {
+      return;
+    }
+    var dir = wheelTravel > 0 ? 1 : -1;
+    wheelTravel = 0;
+    if (navigate(currentIndex() + dir)) {
+      lastWheelSlide = now;
+    }
+  }
+
+  // Download-intent warmup: open the sockets a download will need only when
+  // someone shows intent, so a page view still costs no third-party connection.
+  var WARM_HOSTS = [
+    "https://github.com",
+    "https://objects.githubusercontent.com",
+    "https://release-assets.githubusercontent.com",
+  ];
+  var warmed = false;
+
+  function warmDownloadPath() {
+    if (warmed || !document.head) {
+      return;
+    }
+    warmed = true;
+    WARM_HOSTS.forEach(function (href) {
+      var link = document.createElement("link");
+      link.rel = "preconnect";
+      link.href = href;
+      document.head.appendChild(link);
+    });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll(".btn-primary"), function (button) {
+    ["pointerenter", "pointerdown", "focus"].forEach(function (type) {
+      button.addEventListener(type, warmDownloadPath, { passive: true });
+    });
+  });
 
   function isInMiddleBand(event, activeCore) {
     var target = event.target;
@@ -359,11 +473,17 @@
     });
   });
 
-  stage.addEventListener("pointerdown", onPointerDown, { passive: true });
-  stage.addEventListener("pointermove", onPointerMove, { passive: true });
-  stage.addEventListener("pointerup", onPointerUp, { passive: true });
-  stage.addEventListener("pointercancel", onPointerCancel, { passive: true });
-  stage.addEventListener("click", onClickCapture, true);
+  window.addEventListener("keydown", onKeyDown);
+  window.addEventListener("wheel", onWheel, { passive: true });
+
+  // Dragging needs pointer events; keyboard, trackpad and the warmup do not.
+  if (window.PointerEvent) {
+    stage.addEventListener("pointerdown", onPointerDown, { passive: true });
+    stage.addEventListener("pointermove", onPointerMove, { passive: true });
+    stage.addEventListener("pointerup", onPointerUp, { passive: true });
+    stage.addEventListener("pointercancel", onPointerCancel, { passive: true });
+    stage.addEventListener("click", onClickCapture, true);
+  }
 
   // Drag drift must never survive a resize or a rotation into desktop layout.
   window.addEventListener("resize", function () {

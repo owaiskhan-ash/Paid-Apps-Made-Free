@@ -30,16 +30,34 @@ Then open `http://localhost:8000`.
 - Each slide carries one line under the app name saying what the app does, capped at ten words and kept to a single line (`nowrap`) so it reads as a subtitle, never a paragraph.
 - The square `↗` button on each slide opens that app's GitHub repository, not its release page: source, issues and the Releases tab live there. The release page itself is still what the JSON-LD `installUrl` names, because that is where an install happens.
 - A tiny caption under the buttons records the release each button currently resolves to. It is kept in sync automatically (see below).
+- On a keyboard, `←` / `→` walk the deck and `Home` / `End` jump to the first and last app; a horizontal trackpad swipe does the same. No control or copy is added for it, and vertical scrolling is untouched.
 - The viewport opens with a short, reduced-motion-aware fade/rise; the hairline frame and rules stay static.
 
-## Mobile swipe
+## Deck navigation
 
-`swipe.js` is a small progressive enhancement loaded with a `defer` attribute from the site's own origin:
+`swipe.js` is a small progressive enhancement loaded with a `defer` attribute from the site's own origin. It covers touch, keyboard and trackpad, and nothing it does adds a control or any copy to the page.
 
-- It engages only in the mobile layout the CSS defines for swipes (viewport at or below `620px`, or a coarse pointer such as a finger) and only for pointer input, so desktop layouts and keyboard users are untouched.
+**Touch**
+
+- It engages only in the mobile layout the CSS defines for swipes (viewport at or below `620px`, or a coarse pointer such as a finger) and only for pointer input.
 - A gesture must be mostly horizontal to count, and it commits on either a long enough drag or a quick flick. A committed swipe swallows the click it would otherwise make on the link under the finger, so a swipe never starts a download.
 - The middle `.core` group follows the finger through a `--swipe-x` custom property written with the CSSOM, which the strict Content Security Policy (`script-src 'self'`, `style-src-attr 'none'`) permits, while the top bar, bottom bar, and hairlines remain untouched.
-- With JavaScript blocked or the file missing, the arrows, the `01` to `04` tabs, and the fragments still move between slides.
+
+**Keyboard and trackpad**
+
+- `←` / `→` move one app back or forward; `Home` / `End` jump to the first and last app. The deck only claims the key when it actually moved, and never when `Alt`, `Ctrl` or `Meta` is held, so browser and OS shortcuts still work, and never inside a text field.
+- A two-finger horizontal trackpad swipe counts once it is clearly horizontal (`|deltaX|` beats `|deltaY|`), starts from a small travel threshold so one gesture cannot skip apps, and then waits out a cooldown. Pinch-zoom is ignored, and vertical scrolling always belongs to the page.
+- Both paths change the `#app-0x` fragment rather than hiding slides themselves, so the URL, the active tab, the arrow set and the screen-reader status line stay in agreement with touch.
+
+**Download-intent warmup**
+
+- Hovering, pressing or focusing a `Download` button injects `preconnect` hints for the three hosts the download actually touches: `github.com` for the release alias, then `objects.githubusercontent.com` and `release-assets.githubusercontent.com` for the asset redirect.
+- Nothing connects on a plain page view; the hints are only created once, on intent, so browsing the catalogue stays a single-origin request.
+- The hints are useless unless `connect-src` names those hosts, so `vercel.json` allows exactly those three (plus `'self'`) and nothing else. `tests/test_site.py` fails if the script and the policy ever disagree.
+
+**Without JavaScript**
+
+With JavaScript blocked or the file missing, the arrows, the `01` to `04` tabs, and the fragments still move between slides, and the download buttons still point straight at the release.
 
 ## Keeping the downloads on the latest release
 
@@ -129,7 +147,7 @@ python3 tools/make_assets.py
 - `index.html` keeps the canonical URL, share metadata, and Schema.org `Organization`, `WebSite`, four `WebPage` entries (one per app), and four `SoftwareApplication` entries. Each app entry declares the same `downloadUrl` its button uses.
 - `robots.txt` allows crawling and points to the single-URL `sitemap.xml`.
 - `llms.txt` summarises the site for tools that choose to read it.
-- The Content Security Policy in `vercel.json` blocks inline executable code. JSON-LD is a non-executable data block, so crawlers can read it without weakening `script-src`.
+- The Content Security Policy in `vercel.json` blocks inline executable code. JSON-LD is a non-executable data block, so crawlers can read it without weakening `script-src`. `connect-src` names `'self'` plus the three GitHub hosts the download warmup preconnects to, and the tests keep that list exact.
 - `404.html` is intentionally noindex and matches the same minimal layout.
 
 ## Deployment

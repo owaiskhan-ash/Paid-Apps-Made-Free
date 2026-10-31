@@ -240,6 +240,58 @@ class LandingPageTests(unittest.TestCase):
         self.assertNotRegex(css, r"(?m)^\.bar\s*\{\s*animation:")
         self.assertIn(":not(.is-settled)", css)
 
+    def test_keyboard_and_trackpad_move_between_apps(self):
+        js = (ROOT / "swipe.js").read_text(encoding="utf-8")
+        self.assertIn('window.addEventListener("keydown", onKeyDown)', js)
+        self.assertIn('window.addEventListener("wheel", onWheel, { passive: true })', js)
+        for key in ('"ArrowRight"', '"ArrowLeft"', '"Home"', '"End"'):
+            self.assertIn(f"event.key === {key}", js, f"{key} must move the deck")
+
+        # Never steal browser shortcuts or keys typed into a field.
+        for guard in ("event.altKey", "event.ctrlKey", "event.metaKey", "isContentEditable"):
+            self.assertIn(guard, js)
+
+        # Keys and the trackpad change the fragment, exactly like a tab tap, so the
+        # active tab, the arrows and the URL cannot disagree.
+        self.assertIn('window.location.hash = "#" + slides[to].id', js)
+
+        # A vertical scroll stays with the page; only horizontal intent moves slides,
+        # and a cooldown stops one gesture from skipping several apps.
+        self.assertIn("Math.abs(dx) < Math.abs(event.deltaY)", js)
+        self.assertIn("WHEEL_COOLDOWN", js)
+        self.assertIn("if (event.ctrlKey)", js, "Pinch-zoom must not be read as a swipe")
+
+    def test_download_intent_warmup_is_intent_only_and_csp_allowed(self):
+        js = (ROOT / "swipe.js").read_text(encoding="utf-8")
+        warm_block = js.split("var WARM_HOSTS")[1].split("];")[0]
+        hosts = set(re.findall(r'"(https://[^"]+)"', warm_block))
+        self.assertEqual(
+            hosts,
+            {
+                "https://github.com",
+                "https://objects.githubusercontent.com",
+                "https://release-assets.githubusercontent.com",
+            },
+            "Warm only the hosts a download actually touches",
+        )
+        self.assertIn('link.rel = "preconnect"', js)
+        self.assertIn("if (warmed || !document.head)", js, "Nothing connects until intent fires")
+        for trigger in ('"pointerenter"', '"pointerdown"', '"focus"'):
+            self.assertIn(trigger, js, f"{trigger} must warm the download path")
+        self.assertIn('document.querySelectorAll(".btn-primary")', js)
+
+        config = json.loads((ROOT / "vercel.json").read_text(encoding="utf-8"))
+        policies = {header["key"].lower(): header["value"] for header in config["headers"][0]["headers"]}
+        connect = next(
+            part.strip()
+            for part in policies["content-security-policy"].split(";")
+            if part.strip().startswith("connect-src")
+        )
+        self.assertTrue(connect.startswith("connect-src 'self'"))
+        self.assertNotIn("*", connect, "The allowlist must stay explicit, never a wildcard")
+        for host in hosts:
+            self.assertIn(host, connect, f"preconnect to {host} is blocked unless connect-src allows it")
+
     def test_swipe_script_keeps_the_strict_style_sources(self):
         js = (ROOT / "swipe.js").read_text(encoding="utf-8")
         # CSP sets style-src-attr 'none', which blocks style attributes and cssText but
