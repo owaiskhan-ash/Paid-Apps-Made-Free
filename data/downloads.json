@@ -14,9 +14,9 @@
     },
     "app-04": {
       "name": "Faster Downloads",
-      "total": 50
+      "total": 51
     }
   },
   "note": "Cumulative APK downloads per app, summed across every GitHub release and never allowed to fall. Written by tools/sync_downloads.py; do not hand-edit.",
-  "updated": "2026-11-01T01:29:06Z"
+  "updated": "2026-11-01T08:02:01Z"
 }
