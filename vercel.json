@@ -47,6 +47,15 @@
       ]
     },
     {
+      "source": "/data/downloads\\.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=300, must-revalidate"
+        }
+      ]
+    },
+    {
       "source": "/(favicon\\.ico|favicon\\.png|apple-touch-icon\\.png|site\\.webmanifest|assets/.*)",
       "headers": [
         {

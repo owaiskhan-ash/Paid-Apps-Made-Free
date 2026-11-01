@@ -312,6 +312,7 @@ a:focus-visible {
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
   gap: 0.55rem;
 }
@@ -355,6 +356,35 @@ a:focus-visible {
 .btn-glyph {
   font-size: 0.78rem;
   line-height: 1;
+}
+
+/* Download counter. Filled by counts.js from data/downloads.json, so it reads as
+   a control without being one; it stays hidden until a real number arrives. */
+.dl-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0 0.78rem;
+  border: var(--hairline) solid var(--ink);
+  font-size: 0.55rem;
+  font-weight: 300;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dl-count[hidden] {
+  display: none;
+}
+
+.dl-count-value {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+}
+
+.dl-count-label {
+  opacity: 0.55;
 }
 
 .caption {

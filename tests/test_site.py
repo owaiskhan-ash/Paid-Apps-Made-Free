@@ -4,6 +4,8 @@ import io
 import json
 import re
 import struct
+import subprocess
+import tempfile
 import unittest
 import urllib.error
 from html.parser import HTMLParser
@@ -477,14 +479,93 @@ class LandingPageTests(unittest.TestCase):
     def test_static_assets_resolve_and_no_inline_or_external_runtime_code(self):
         self.assertEqual(
             self.parser.external_scripts,
-            ["/swipe.js"],
-            "The only script is the local, same-origin swipe enhancement",
+            ["/swipe.js", "/counts.js"],
+            "Both scripts are local and same-origin: deck navigation and the download counter",
         )
         self.assertEqual(self.parser.inline_styles, 0, "Styles must remain in the CSP-approved stylesheet")
         for asset in self.parser.local_assets:
             path = (ROOT / asset.lstrip("/")).resolve()
             self.assertTrue(path.is_relative_to(ROOT), f"Asset path escaped repo: {asset}")
             self.assertTrue(path.exists(), f"Missing local asset: {asset}")
+
+    def test_every_slide_shows_a_download_counter_beside_the_buttons(self):
+        sample = (ROOT / "index.html").read_text(encoding="utf-8")
+        for app_id in ("app-01", "app-02", "app-03", "app-04"):
+            block = slide_block(sample, app_id)
+            self.assertEqual(
+                block.count('data-downloads="'),
+                1,
+                f"{app_id} must carry exactly one download counter",
+            )
+            slot = re.search(
+                r'<span class="dl-count" data-downloads="%s" hidden>(.*?)</span>\s*</span>' % app_id,
+                block,
+                flags=re.DOTALL,
+            )
+            self.assertIsNotNone(slot, f"{app_id} needs a hidden .dl-count slot counts.js can fill")
+            # It starts hidden with a placeholder, so no invented number is ever shown.
+            self.assertIn("hidden", slot.group(0))
+            self.assertIn('<span class="dl-count-value">0</span>', slot.group(0))
+            self.assertIn('<span class="dl-count-label">downloads</span>', slot.group(0))
+            actions = re.search(r'<div class="actions">(.*?)</div>', block, flags=re.DOTALL).group(1)
+            self.assertIn(f'data-downloads="{app_id}"', actions, "The counter belongs in the button row")
+            self.assertLess(
+                actions.index("btn-square"),
+                actions.index('data-downloads="'),
+                "Keep the repository button next to Download and the counter after it",
+            )
+        css = (ROOT / "styles.css").read_text(encoding="utf-8")
+        self.assertIn(".dl-count[hidden]", css, "A hidden counter has to be invisible, not just empty")
+        self.assertIn("font-variant-numeric: tabular-nums", css)
+
+    def test_counter_script_reads_only_the_committed_data_file(self):
+        js = (ROOT / "counts.js").read_text(encoding="utf-8")
+        self.assertIn('fetch("/data/downloads.json"', js)
+        self.assertIn("credentials: \"same-origin\"", js)
+        # Same origin keeps the strict connect-src intact: no call to api.github.com
+        # from the visitor's browser, so no rate limit and no CORS dependency.
+        self.assertNotIn("http://", js)
+        self.assertNotIn("https://", js)
+        self.assertNotIn("innerHTML", js)
+        self.assertNotIn("eval(", js)
+        # A failed read leaves the counter hidden instead of guessing.
+        self.assertIn(".catch(", js)
+        self.assertIn("slot.hidden = false", js)
+        page = (ROOT / "index.html").read_text(encoding="utf-8")
+        self.assertLess(
+            page.index('src="/swipe.js"'),
+            page.index('src="/counts.js"'),
+            "The counter is independent of the deck script and loads after it",
+        )
+        self.assertIn('src="/counts.js" defer', page)
+
+    def test_download_counter_data_covers_every_app(self):
+        payload = json.loads((ROOT / "data/downloads.json").read_text(encoding="utf-8"))
+        self.assertIn("note", payload)
+        self.assertRegex(payload["updated"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+        stored = payload["apps"]
+        self.assertEqual(
+            sorted(stored),
+            ["app-01", "app-02", "app-03", "app-04"],
+            "Every app with a counter needs a stored total",
+        )
+        for app_id, entry in stored.items():
+            self.assertIsInstance(entry["total"], int, f"{app_id} total must be an integer")
+            self.assertGreaterEqual(entry["total"], 0)
+        self.assertEqual(
+            [stored[f"app-0{n}"]["name"] for n in range(1, 5)],
+            ["AutoWall", "Progress Tracker", "Teal", "Faster Downloads"],
+        )
+        # The file is committed, so plain site edits cannot reset it. Check that git
+        # is willing to carry it rather than that it is already committed, so the
+        # suite also passes on the run that first adds it.
+        ignored = subprocess.run(
+            ["git", "check-ignore", "--quiet", "data/downloads.json"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(ignored.returncode, 1, "data/downloads.json must be committable, never ignored")
 
     def test_stylesheet_stays_thin_and_fluorescent(self):
         css = (ROOT / "styles.css").read_text(encoding="utf-8")
@@ -775,6 +856,99 @@ class ReleaseSyncTests(unittest.TestCase):
         self.assertIn("branches: [main]", workflow)
         self.assertIn("contents: write", workflow)
         self.assertIn('["apps"]', workflow)
+        # The counter is refreshed by the same run and stored in the repository.
+        self.assertIn("tools/sync_downloads.py", workflow)
+        self.assertIn("tools/sync_downloads.py --check", workflow)
+        self.assertIn("git add index.html data/downloads.json", workflow)
+
+
+class DownloadCountTests(unittest.TestCase):
+    """The counter must add up every version and never reset."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("sync_downloads", ROOT / "tools/sync_downloads.py")
+        cls.counts = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.counts)
+
+    @staticmethod
+    def release(tag, *assets, draft=False, prerelease=False):
+        return {
+            "tag_name": tag,
+            "draft": draft,
+            "prerelease": prerelease,
+            "assets": [
+                {"name": name, "download_count": downloads} for name, downloads in assets
+            ],
+        }
+
+    def test_totals_add_up_every_version_and_ignore_non_installs(self):
+        releases = [
+            self.release("v1.0.0", ("App.apk", 10)),
+            self.release("v1.1.0", ("App-v1.1.0.apk", 5), ("checksums.txt", 900)),
+            self.release("v2.0.0", ("App-v2.0.0.apk", 3)),
+            self.release("v2.1.0-beta", ("App-v2.1.0-beta.apk", 2), prerelease=True),
+            self.release("v3.0.0-draft", ("App-v3.0.0.apk", 99), draft=True),
+        ]
+        # 10 + 5 + 3 + 2: every published version, beta included, drafts and
+        # non-APK assets excluded. A fresh tag does not restart the count.
+        self.assertEqual(self.counts.release_downloads(releases), 20)
+
+    def test_a_tagged_apk_keeps_previous_versions_counted(self):
+        old = [self.release("v1.0.0", ("App.apk", 7))]
+        new = old + [self.release("v2.0.0", ("App-v2.0.0.apk", 2))]
+        self.assertEqual(self.counts.release_downloads(old), 7)
+        self.assertEqual(self.counts.release_downloads(new), 9)
+
+    def test_stored_totals_only_ever_grow(self):
+        previous = {"apps": {"app-01": {"name": "AutoWall", "total": 40}}}
+        fresh = {"app-01": 12}
+        totals, raised = self.counts.merge(previous, fresh)
+        self.assertEqual(totals["app-01"]["total"], 40, "A deleted release must not reset the count")
+        self.assertEqual(raised, [])
+
+        totals, raised = self.counts.merge(previous, {"app-01": 55})
+        self.assertEqual(totals["app-01"]["total"], 55)
+        self.assertEqual(raised, ["01 AutoWall: 40 -> 55"])
+
+    def test_a_site_edit_does_not_touch_the_stored_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "downloads.json"
+            totals = {"app-01": {"name": "AutoWall", "total": 7}}
+            with mock.patch.object(self.counts, "DATA", target):
+                self.assertTrue(self.counts.write_data(totals))
+                first = target.read_text(encoding="utf-8")
+                # Same totals on the next scheduled run: no timestamp churn, so a
+                # quiet day produces no commit and the number stays put.
+                self.assertFalse(self.counts.write_data(totals))
+                self.assertEqual(target.read_text(encoding="utf-8"), first)
+                # Editing the page keeps the data file byte-identical.
+                self.assertEqual(json.loads(first)["apps"], totals)
+
+    def test_check_rejects_a_page_that_lost_a_counter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data = Path(tmp) / "downloads.json"
+            page = Path(tmp) / "index.html"
+            data.write_text(
+                json.dumps(
+                    {
+                        "apps": {
+                            "app-01": {"name": "AutoWall", "total": 1},
+                            "app-02": {"name": "Progress Tracker", "total": 2},
+                            "app-03": {"name": "Teal", "total": 3},
+                            "app-04": {"name": "Faster Downloads", "total": 4},
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            page.write_text('<span data-downloads="app-01"></span>', encoding="utf-8")
+            with mock.patch.object(self.counts, "DATA", data), mock.patch.object(self.counts, "PAGE", page):
+                with contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(self.counts.check(), 1)
+            with mock.patch.object(self.counts, "DATA", ROOT / "data/downloads.json"):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(self.counts.check(), 0)
 
 
 if __name__ == "__main__":
