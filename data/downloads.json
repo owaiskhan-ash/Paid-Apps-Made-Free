@@ -1,0 +1,22 @@
+{
+  "apps": {
+    "app-01": {
+      "name": "AutoWall",
+      "total": 18
+    },
+    "app-02": {
+      "name": "Progress Tracker",
+      "total": 25
+    },
+    "app-03": {
+      "name": "Teal",
+      "total": 28
+    },
+    "app-04": {
+      "name": "Faster Downloads",
+      "total": 48
+    }
+  },
+  "note": "Cumulative APK downloads per app, summed across every GitHub release and never allowed to fall. Written by tools/sync_downloads.py; do not hand-edit.",
+  "updated": "2026-11-01T00:25:11Z"
+}

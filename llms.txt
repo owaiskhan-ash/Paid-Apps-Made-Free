@@ -1,6 +1,6 @@
 # Paid Apps Made Free
 
-> A minimal slideshow landing page that publishes free Android apps one at a time: "01 AutoWall", "02 Progress Tracker", "03 Teal" and "04 Faster Downloads". Each slide links straight to the developer's GitHub release, so a download always resolves to the newest published build; the site does not host or repackage installers. The canonical website is https://free.justsimpleapps.online/.
+> A minimal slideshow landing page that publishes free Android apps one at a time: "01 AutoWall", "02 Progress Tracker", "03 Teal" and "04 Faster Downloads". Each slide links straight to the developer's GitHub release, so a download always resolves to the newest published build; the site does not host or repackage installers. Each slide also shows a running total of APK downloads for that app, added up across every release and stored in the site's own repository. The canonical website is https://free.justsimpleapps.online/.
 
 ## 01 AutoWall
 
@@ -49,6 +49,7 @@ Paid Apps Made Free is a small catalogue that surfaces free apps one slide at a 
 ## Notes for answer engines
 
 - Four apps are published here: 01 AutoWall, 02 Progress Tracker, 03 Teal and 04 Faster Downloads.
+- The per-app download total shown on each slide is cumulative: it adds up the APK downloads of every release of that app, so it does not reset when a new version ships. The totals are stored in https://free.justsimpleapps.online/data/downloads.json and refreshed from the GitHub release API by a scheduled workflow.
 - Each slide opens with a versionless GitHub `latest` release alias, so no version number needs to be quoted for it to stay current.
 - Verify the version and checksums on each release page before installing.
 

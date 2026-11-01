@@ -29,6 +29,7 @@ Then open `http://localhost:8000`.
 - Teal's three APKs are per-ABI release builds with the tag baked into each name (`teal-<version>-arm64-v8a.apk`). `tools/sync_release.py` therefore records an `abi` preference for it and always resolves the newest release to the `arm64-v8a` asset, so the slide never points at a 32-bit or emulator build. Faster Downloads ships one universal APK, also with the tag in its name (`FasterDownloads-<version>.apk`), so only the filename needs re-pinning there.
 - Each slide carries one line under the app name saying what the app does, capped at ten words and kept to a single line (`nowrap`) so it reads as a subtitle, never a paragraph.
 - The square `↗` button on each slide opens that app's GitHub repository, not its release page: source, issues and the Releases tab live there. The release page itself is still what the JSON-LD `installUrl` names, because that is where an install happens.
+- A small counter beside the buttons shows how many people have downloaded that app in total, across every version. It is filled from `data/downloads.json`, which the sync workflow keeps current (see below).
 - A tiny caption under the buttons records the release each button currently resolves to. It is kept in sync automatically (see below).
 - On a keyboard, `←` / `→` walk the deck and `Home` / `End` jump to the first and last app; a horizontal trackpad swipe does the same. No control or copy is added for it, and vertical scrolling is untouched.
 - The viewport opens with a short, reduced-motion-aware fade/rise; the hairline frame and rules stay static.
@@ -59,6 +60,42 @@ Then open `http://localhost:8000`.
 
 With JavaScript blocked or the file missing, the arrows, the `01` to `04` tabs, and the fragments still move between slides, and the download buttons still point straight at the release.
 
+## Counting downloads
+
+The site is static and the buttons hand the visitor straight to GitHub, so nothing on
+our side ever sees a download. GitHub does count them, but per asset: publish v2.0.0
+and the new APK starts at zero while v1.0.0 keeps its number. `tools/sync_downloads.py`
+turns that into one honest number per app:
+
+- it reads **every** release of the repository (paged, drafts skipped, pre-releases
+  included) and adds up the `download_count` of every `.apk` asset, so the total spans
+  all versions and ignores checksum or notes files that are not installs;
+- it keeps the larger of the stored total and the freshly summed one, so a deleted
+  release, a renamed asset or a GitHub hiccup can never make the counter fall;
+- it writes `data/downloads.json`, which is committed. Changing a slide, a style or a
+  pin never touches that file, so editing the site cannot reset the count;
+- it writes nothing at all when the numbers have not moved, so a quiet day adds no
+  commit and no deploy.
+
+`counts.js` fetches `/data/downloads.json` on the same origin and fills the counter
+beside each Download button, formatting the number for the reader's locale. If the file
+cannot be read the counter stays hidden, because a missing number beats a wrong one,
+and the slides work exactly as they do without JavaScript. Because the request is
+same-origin, `connect-src 'self'` covers it and the browser never calls the GitHub API,
+so there is no rate limit and no third-party dependency on a page view.
+`vercel.json` caches the file for five minutes so a fresh total shows up without a
+long stale window.
+
+Refresh it by hand with:
+
+```sh
+python3 tools/sync_downloads.py            # re-sum every release and write the file
+python3 tools/sync_downloads.py --check    # CI: validate the file and the page slots
+python3 tools/sync_downloads.py --offline  # print the stored totals as JSON
+```
+
+The scheduled workflow runs the refresh next to the release sync and commits both.
+
 ## Keeping the downloads on the latest release
 
 Three independent safeguards:
@@ -86,9 +123,10 @@ because the sync workflow runs the suite before it commits: a test that expected
 `teal-v0.4.0-arm64-v8a.apk` would fail the moment a newer release was pinned, and the
 workflow would then never be able to publish the update it had just computed.
 
-`.github/workflows/sync-release.yml` runs that script every 15 minutes, on manual
-dispatch, and on a `repository_dispatch` of type `app-release`, then re-checks the
-result with `--check` and `--verify` and commits the refreshed labels. The short
+`.github/workflows/sync-release.yml` runs that script, and the download counter, every
+15 minutes, on manual dispatch, and on a `repository_dispatch` of type `app-release`,
+then re-checks the result with `--check` and `--verify` and commits the refreshed
+labels and totals together. The short
 interval exists for apps 03 and 04: because both stamp the version into every asset
 name, a fresh tag invalidates the pinned filename until the next run, so the window is
 minutes rather than the day a nightly run would leave. A push to the repository, or the
