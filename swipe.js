@@ -10,14 +10,13 @@
   // Phones and tablets: narrow viewports, or any coarse pointer such as a finger.
   // Keep this query in sync with the mobile swipe block in styles.css.
   var MOBILE_QUERY = "(max-width: 620px), (hover: none) and (pointer: coarse)";
-  var REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
   var ENGAGE_TRAVEL = 12; // px of horizontal travel before a drag becomes a swipe
   var COMMIT_RATIO = 0.2; // share of the middle width that commits a slide change
   var COMMIT_MIN = 52; // but never less than this many px
   var FLICK_VELOCITY = 0.4; // px per ms, so a quick flick commits regardless of distance
   var DRAG_LIMIT = 0.85; // the middle group never trails further than this share of the width
-  var SNAP_MS = 220; // fallback cleanup window for an uncommitted snap-back
+  var SNAP_MS = 60; // how long the snap-back class lingers, in one painted frame
 
   var deck = document.querySelector(".deck");
   var stage = document.querySelector(".stage");
@@ -35,23 +34,13 @@
 
   var status = document.querySelector(".swipe-status");
   var mobile = window.matchMedia ? window.matchMedia(MOBILE_QUERY) : null;
-  var reducedMotion = window.matchMedia ? window.matchMedia(REDUCED_MOTION_QUERY) : null;
   var drag = null;
   var blockClick = false;
   var lastSwipeHash = "";
   var snapTimer = 0;
 
-  if (!window.location.hash) {
-    // Slide 01 is already on screen at /, so tapping 01 (#app-01) must not re-enter.
-    cores[0].classList.add("is-settled");
-  }
-
   function isMobile() {
     return !mobile || mobile.matches;
-  }
-
-  function prefersReducedMotion() {
-    return Boolean(reducedMotion && reducedMotion.matches);
   }
 
   function currentIndex() {
@@ -103,10 +92,6 @@
       return;
     }
     clearSnapTimer();
-    if (prefersReducedMotion()) {
-      resetCore(core);
-      return;
-    }
     core.classList.add("is-snapping");
     core.classList.remove("is-swiping");
     core.style.removeProperty("--swipe-x");
@@ -119,8 +104,8 @@
     }, SNAP_MS);
   }
 
-  // Bring the incoming middle elements in from the edge the finger pushed toward,
-  // while keeping the top bar, bottom bar, and hairlines completely untouched.
+  // Show the next or previous slide. The fragment change is instant: the top bar,
+  // bottom bar and hairlines never move, and no animation has to finish first.
   function go(dir) {
     var from = currentIndex();
     var to = from + dir;
@@ -132,14 +117,10 @@
     var incoming = slides[to];
     var incomingCore = cores[to];
 
-    deck.classList.add("has-interacted");
     clearSnapTimer();
 
-    // Mark the incoming middle group settled BEFORE changing the fragment so
-    // :target never starts a competing entrance or restarts one on animationend.
+    // Clear any leftover drag state before the fragment change shows this slide.
     resetCore(incomingCore);
-    incomingCore.classList.remove("swipe-in-next", "swipe-in-prev");
-    incomingCore.classList.add("is-settled", dir > 0 ? "swipe-in-next" : "swipe-in-prev");
 
     var scrollX = window.scrollX || window.pageXOffset || 0;
     var scrollY = window.scrollY || window.pageYOffset || 0;
@@ -154,7 +135,6 @@
 
     // Reset the outgoing middle group only after the fragment change hid its slide.
     resetCore(outgoingCore);
-    outgoingCore.classList.remove("swipe-in-next", "swipe-in-prev", "is-settled");
 
     announce(to);
     return true;
@@ -176,11 +156,8 @@
     if (to < 0 || to >= slides.length || to === from) {
       return false;
     }
-    deck.classList.add("has-interacted");
     resetCore(cores[from]);
-    cores[from].classList.remove("swipe-in-next", "swipe-in-prev", "is-settled");
     resetCore(cores[to]);
-    cores[to].classList.remove("swipe-in-next", "swipe-in-prev");
     window.location.hash = "#" + slides[to].id;
     announce(to);
     return true;
@@ -343,9 +320,8 @@
       }
       drag.engaged = true;
       clearSnapTimer();
-      deck.classList.add("has-interacted");
-      drag.core.classList.remove("is-snapping", "swipe-in-next", "swipe-in-prev");
-      drag.core.classList.add("is-settled", "is-swiping");
+        drag.core.classList.remove("is-snapping");
+      drag.core.classList.add("is-swiping");
       if (stage.setPointerCapture) {
         try {
           stage.setPointerCapture(event.pointerId);
@@ -435,40 +411,13 @@
     }
   }
 
-  // Keep .is-settled after animations end so :target never replays and flickers.
-  deck.addEventListener("animationend", function (event) {
-    var target = event.target;
-    if (!target || !target.classList || !target.classList.contains("core")) {
-      return;
-    }
-    if (event.animationName.indexOf("swipe-") === 0) {
-      target.classList.add("is-settled");
-      target.classList.remove("swipe-in-next", "swipe-in-prev");
-    } else if (event.animationName === "slide-in") {
-      target.classList.add("is-settled");
-    }
-  });
-
-  deck.addEventListener("transitionend", function (event) {
-    var target = event.target;
-    if (target && target.classList && target.classList.contains("is-snapping")) {
-      clearSnapTimer();
-      target.classList.remove("is-snapping");
-    }
-  });
-
   window.addEventListener("hashchange", function () {
-    deck.classList.add("has-interacted");
     var active = currentIndex();
     var fromSwipe = window.location.hash === lastSwipeHash;
     lastSwipeHash = "";
     cores.forEach(function (core, index) {
-      if (index !== active) {
+      if (index !== active || !fromSwipe) {
         resetCore(core);
-        core.classList.remove("swipe-in-next", "swipe-in-prev", "is-settled");
-      } else if (!fromSwipe) {
-        resetCore(core);
-        core.classList.remove("swipe-in-next", "swipe-in-prev");
       }
     });
   });

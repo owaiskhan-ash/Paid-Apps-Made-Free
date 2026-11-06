@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Refresh derived favicon sizes from assets/free-app-icon.png and verify share assets.
 
+Every derived icon is written as an 8-bit (192 colour) PNG. These files are tiny,
+flat artwork, so the palette costs nothing visible and cuts the bytes a browser
+downloads on the first visit by more than half.
+
 Run from the repository root:
 
     python3 tools/make_assets.py
@@ -56,7 +60,9 @@ def main() -> None:
                     "-resize",
                     f"{size}x{size}",
                     "-strip",
-                    f"PNG24:{dest}",
+                    "-colors",
+                    "192",
+                    f"PNG8:{dest}",
                 ],
                 check=True,
             )
@@ -65,7 +71,7 @@ def main() -> None:
                 convert,
                 str(SOURCE_ICON),
                 "-define",
-                "icon:auto-resize=96,48,32,16",
+                "icon:auto-resize=48,32,16",
                 "-strip",
                 str(ROOT / "favicon.ico"),
             ],

@@ -1,0 +1,6 @@
+# None of this is served by the site. Leaving it out of the upload keeps every
+# deploy small and quick, which is the slowest part of a change going live.
+Video generation/
+tests/
+tools/
+.github/

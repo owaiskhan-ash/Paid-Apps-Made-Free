@@ -9,7 +9,6 @@
   --hairline: 1px;
   font-family: "Helvetica Neue", Helvetica, Arial, ui-sans-serif, system-ui, sans-serif;
   font-synthesis: none;
-  text-rendering: optimizeLegibility;
 }
 
 * {
@@ -18,6 +17,9 @@
 
 html {
   background: var(--fluoro);
+  /* A fragment change must jump straight there. Nothing on this page eases the
+     scroll, and this keeps it that way if a future rule ever asks for smooth. */
+  scroll-behavior: auto;
 }
 
 body {
@@ -396,95 +398,19 @@ a:focus-visible {
   text-transform: uppercase;
 }
 
-/* ---------- entrance ---------- */
-
-@keyframes frame-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(0.7rem);
-    filter: blur(2px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
-  }
-}
-
-@keyframes buttons-in {
-  from {
-    opacity: 0;
-    transform: translateY(1rem);
-    filter: blur(2px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
-  }
-}
-
-@keyframes slide-in {
-  from {
-    opacity: 0.45;
-    transform: translate3d(0, 0.4rem, 0);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-
-.hairlines {
-  animation: frame-in 900ms ease both;
-}
-
-.bar-top {
-  animation: rise 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-
-/* Staggered rise runs only on the initial landing view; switching slides never
-   fades the bottom bar or blanks out the buttons and caption. */
-.deck:not(:has(.slide:target)):not(.has-interacted) .app-code,
-.deck:not(:has(.slide:target)):not(.has-interacted) .tagline,
-.deck:not(:has(.slide:target)):not(.has-interacted) .caption,
-.deck:not(:has(.slide:target)):not(.has-interacted) .bar-bottom {
-  animation: rise 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-
-.deck:not(:has(.slide:target)):not(.has-interacted) .actions {
-  animation: buttons-in 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-  animation-delay: 140ms;
-}
-
-.deck:not(:has(.slide:target)):not(.has-interacted) .caption {
-  animation-delay: 240ms;
-}
-
-/* Non-swipe tab changes animate only the middle elements once, leaving bars steady. */
-.slide:target .core:not(.is-settled):not(.is-swiping):not(.is-snapping):not(.swipe-in-next):not(.swipe-in-prev) {
-  animation: slide-in 240ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
+/* ---------- no entrance motion ---------- */
+/* The page paints once, finished, on the first frame: no fades, no staggered
+   rises, and above all no blur filter over text, which is the most expensive
+   thing a phone can be asked to paint. Switching slides is equally immediate;
+   the DOM change is the whole effect. */
 
 @media (prefers-reduced-motion: reduce) {
-  .hairlines,
-  .bar-top,
-  .deck:not(:has(.slide:target)):not(.has-interacted) .app-code,
-  .deck:not(:has(.slide:target)):not(.has-interacted) .tagline,
-  .deck:not(:has(.slide:target)):not(.has-interacted) .actions,
-  .deck:not(:has(.slide:target)):not(.has-interacted) .caption,
-  .deck:not(:has(.slide:target)):not(.has-interacted) .bar-bottom,
-  .slide:target .core:not(.is-settled):not(.is-swiping):not(.is-snapping):not(.swipe-in-next):not(.swipe-in-prev) {
-    animation: none;
+  /* Nothing animates here, so reduced motion only has the hover fades left to
+     quiet down. */
+  .nav-arrow,
+  .nav-dot,
+  .btn {
+    transition: none;
   }
 }
 
@@ -529,79 +455,42 @@ a:focus-visible {
   border: 0;
 }
 
-@keyframes swipe-from-next {
-  from {
-    opacity: 0.45;
-    transform: translate3d(24%, 0, 0);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-
-@keyframes swipe-from-prev {
-  from {
-    opacity: 0.45;
-    transform: translate3d(-24%, 0, 0);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-
 /* Phones and tablets: narrow viewports, or any coarse pointer such as a finger.
    Keep this query in sync with MOBILE_QUERY in swipe.js. */
 @media (max-width: 620px), (hover: none) and (pointer: coarse) {
-  /* Horizontal swipes in the middle area belong to the deck; vertical gestures still scroll. */
+  /* Horizontal swipes in the middle area belong to the deck; vertical gestures
+     still scroll the page. */
   .core {
     touch-action: pan-y;
+  }
+
+  /* A compositing layer is only worth the memory while a finger is actually
+     moving the group, so nothing asks for one at rest. */
+  .core.is-swiping,
+  .core.is-snapping {
     -webkit-backface-visibility: hidden;
     backface-visibility: hidden;
     will-change: transform;
   }
 
-  /* Only the middle elements follow the finger; top bar, bottom bar, and hairlines stay put. */
+  /* The middle group follows the finger exactly. */
   .core.is-swiping {
-    animation: none;
     transition: none;
     transform: translate3d(var(--swipe-x, 0px), 0, 0);
     -webkit-user-select: none;
     user-select: none;
   }
 
-  /* An uncommitted drag eases smoothly back to centre instead of snapping. */
+  /* A released drag snaps back to centre in one frame: no transition, no easing. */
   .core.is-snapping {
-    animation: none;
-    transition: transform 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    transition: none;
     transform: translate3d(0, 0, 0);
-  }
-
-  /* A completed swipe brings the incoming middle elements in from the side they came from. */
-  .core.swipe-in-next {
-    animation: swipe-from-next 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-  }
-
-  .core.swipe-in-prev {
-    animation: swipe-from-prev 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .core {
-    will-change: auto;
-  }
-
   .core.is-swiping,
   .core.is-snapping {
-    animation: none;
-    transition: none;
-    transform: none;
-  }
-
-  .core.swipe-in-next,
-  .core.swipe-in-prev {
-    animation: none;
+    will-change: auto;
   }
 }

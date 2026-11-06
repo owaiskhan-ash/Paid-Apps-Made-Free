@@ -24,7 +24,7 @@ Then open `http://localhost:8000`.
 - The page is a deck of `<section class="slide">` blocks. Exactly one is visible at a time: the slide named by the URL fragment, or `01 AutoWall` when the URL has no fragment.
 - `01` through `04` tabs (plus the arrow keys in the top bar) switch slides by changing `#app-01` to `#app-04`, so each app has a shareable URL (`/#app-02`) and the page keeps working without JavaScript. Both arrow boxes stay in place at the ends of the deck so the tabs never shift sideways.
 - `FREE` sits in the top-right bar with no icon box on the page itself.
-- Swiping left on a phone opens the next app and swiping right returns to the previous one; only the middle `.core` elements respond to and follow the gesture while the top bar, bottom bar, and hairline frame stay completely still. At either end of the deck the middle group resists the drag and eases back instead of moving. A swipe sets the same `#app-01` to `#app-04` fragment as a nav tap, so the arrows, the URL, and the active tab always agree, and incoming middle elements enter smoothly from the side the finger pushed toward with no flicker. Horizontal gestures in the middle band belong to the deck (`touch-action: pan-y`), vertical gestures still scroll, and `prefers-reduced-motion` swaps the slide animation for an instant change.
+- Swiping left on a phone opens the next app and swiping right returns to the previous one; only the middle `.core` elements respond to and follow the gesture while the top bar, bottom bar, and hairline frame stay completely still. At either end of the deck the middle group resists the drag and snaps straight back instead of moving. A swipe sets the same `#app-01` to `#app-04` fragment as a nav tap, so the arrows, the URL, and the active tab always agree, and the new slide is on screen in the same frame with no animation to sit through. Horizontal gestures in the middle band belong to the deck (`touch-action: pan-y`) and vertical gestures still scroll.
 - Each slide's `Download` button points at `https://github.com/<owner>/<repo>/releases/latest/download/<asset>`. Because the path uses the `latest` release alias, it keeps working when a newer release is published; it never needs editing. For an app that stamps the version into its asset names, the `<asset>` half is the one part that has to move, which is what the sync below does.
 - Teal's three APKs are per-ABI release builds with the tag baked into each name (`teal-<version>-arm64-v8a.apk`). `tools/sync_release.py` therefore records an `abi` preference for it and always resolves the newest release to the `arm64-v8a` asset, so the slide never points at a 32-bit or emulator build. Faster Downloads ships one universal APK, also with the tag in its name (`FasterDownloads-<version>.apk`), so only the filename needs re-pinning there.
 - Each slide carries one line under the app name saying what the app does, capped at ten words and kept to a single line (`nowrap`) so it reads as a subtitle, never a paragraph.
@@ -32,7 +32,34 @@ Then open `http://localhost:8000`.
 - A small counter beside the buttons shows how many people have downloaded that app in total, across every version. It is filled from `data/downloads.json`, which the sync workflow keeps current (see below).
 - A tiny caption under the buttons records the release each button currently resolves to. It is kept in sync automatically (see below).
 - On a keyboard, `←` / `→` walk the deck and `Home` / `End` jump to the first and last app; a horizontal trackpad swipe does the same. No control or copy is added for it, and vertical scrolling is untouched.
-- The viewport opens with a short, reduced-motion-aware fade/rise; the hairline frame and rules stay static.
+- The viewport paints complete on the first frame: no entrance fade, no rise, no blur. The hairline frame and rules are static, and nothing on the page waits for an animation to finish.
+
+## Speed
+
+The page is one document, one stylesheet, two small deferred scripts and a handful
+of icons. Nothing on it animates, and that is deliberate:
+
+- **No motion anywhere.** There are no keyframes and no `filter` on the page, so the
+  first paint is also the final paint. Slide changes, trackpad swipes and the
+  snap-back after an aborted drag all happen in a single frame. `scroll-behavior:
+  auto` is pinned so a fragment change jumps instead of gliding. The only transitions
+  left are the 160 ms hover fades on the small controls, and reduced-motion turns
+  even those off.
+- **Five icon links, not eleven.** The 512 and 1280 PNGs used to be declared as
+  favicons on both `index.html` and `404.html`, so a browser could pull the 2.5 MB
+  master for a tab icon. They now stay in `site.webmanifest` and the structured data,
+  where only install prompts and crawlers ask for them. The declared set drops from
+  about 3.2 MB to about 54 KB, and every derived icon is re-encoded as a 192-colour
+  PNG with the small `favicon.ico` rebuilt from 48, 32 and 16 pixel frames. A whole
+  first paint, markup and both scripts included, is now under 100 KB.
+- **Repeat visits cost nothing.** `vercel.json` caches the stylesheet and scripts for
+  five minutes with a day of `stale-while-revalidate`, and the icons for a week, so a
+  returning visitor renders from cache while the files revalidate in the background.
+- **Deploys stay small.** `.vercelignore` keeps `Video generation/` (66 MB of source
+  video that no page links to) and the test and tool folders out of the upload, so a
+  change reaches production quickly.
+- **No third-party request on load.** Fonts are system fonts, the counter reads a
+  same-origin JSON file, and the GitHub preconnects only happen on download intent.
 
 ## Deck navigation
 
@@ -171,7 +198,7 @@ python3 -m unittest discover -s tests -v
 
 ## Brand icons and social share card
 
-- `assets/free-app-icon.png` (1280×1280) is the high-resolution fluorescent debossed `FREE` icon saved in the repository and used as the site favicon (`assets/favicon-32x32.png`, `favicon.ico`, and `assets/apple-touch-icon.png`).
+- `assets/free-app-icon.png` (1280×1280) is the high-resolution fluorescent debossed `FREE` icon the smaller icons are derived from. It is named in the structured data, not in the icon links: a tab never needs 1280 pixels, and declaring it cost up to 2.5 MB a visit. The page links `favicon.ico`, the 48, 96 and 192 PNGs, and the 180 apple-touch icon.
 - `assets/og-image.png` (1200×630) is the Open Graph / X social share card.
 
 To refresh derived favicon sizes from `assets/free-app-icon.png` (requires ImageMagick `convert`):
