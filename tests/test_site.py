@@ -171,7 +171,7 @@ class LandingPageTests(unittest.TestCase):
         css = (ROOT / "styles.css").read_text(encoding="utf-8")
         tagline_block = re.search(r"\.tagline\s*\{([^}]*)\}", css, flags=re.DOTALL).group(1)
         self.assertIn("white-space: nowrap", tagline_block, "The tagline must render on one line")
-        self.assertIn(".deck:not(:has(.slide:target)):not(.has-interacted) .tagline", css)
+        self.assertIn("font-size: clamp(", tagline_block, "The tagline scales with the viewport")
 
     def test_top_bar_shows_navigation_and_free_on_right_without_box(self):
         top_bar = re.search(r'<header class="bar bar-top">(.*?)</header>', self.html, flags=re.DOTALL).group(1)
@@ -218,10 +218,11 @@ class LandingPageTests(unittest.TestCase):
         # Only the middle .core elements move; touches on top/bottom .bar are ignored.
         self.assertIn('closest(".bar")', js)
         self.assertIn('slide.querySelector(".core")', js)
-        # A swipe sets the #app-0x fragment while marking incoming .core settled first so
-        # :target never replays a competing animation on animationend.
+        # A swipe sets the #app-0x fragment, which is exactly what a nav tap does,
+        # and nothing waits on an animation before the next slide shows.
         self.assertIn('window.location.hash = "#" + incoming.id', js)
-        self.assertIn("is-settled", js)
+        self.assertNotIn("animationend", js)
+        self.assertNotIn("transitionend", js)
         # A committed swipe must not also open the download link under the finger.
         self.assertIn('addEventListener("click", onClickCapture, true)', js)
 
@@ -229,18 +230,57 @@ class LandingPageTests(unittest.TestCase):
         self.assertIn("touch-action: pan-y", css)
         self.assertIn(".core.is-swiping", css)
         self.assertIn(".core.is-snapping", css)
-        self.assertIn(".core.swipe-in-next", css)
-        self.assertIn(".core.swipe-in-prev", css)
         self.assertNotIn(".slide.is-swiping", css)
-        self.assertNotIn(".slide.swipe-in-next", css)
-        self.assertNotIn(".slide.swipe-in-prev", css)
         self.assertIn("var(--swipe-x, 0px)", css)
-        self.assertIn("@keyframes swipe-from-next", css)
-        self.assertIn("@keyframes swipe-from-prev", css)
         self.assertIn("@media (prefers-reduced-motion: reduce)", css)
-        # Switching slides must never re-run initial rise animations on .bar-bottom or buttons.
-        self.assertNotRegex(css, r"(?m)^\.bar\s*\{\s*animation:")
-        self.assertIn(":not(.is-settled)", css)
+        # The deck moves in one frame: a drag follows the finger and a released drag
+        # snaps back with no transition, so nothing is ever mid-animation.
+        self.assertIn("transition: none", css)
+        self.assertNotIn("@keyframes", css)
+        self.assertNotIn("animation:", css)
+        self.assertNotIn("filter: blur", css)
+
+    def test_the_page_paints_once_with_no_motion_and_few_requests(self):
+        css = (ROOT / "styles.css").read_text(encoding="utf-8")
+        # Nothing animates, nothing eases the scroll, nothing blurs text on paint.
+        self.assertNotIn("animation", css)
+        self.assertNotIn("filter:", css)
+        self.assertNotIn("text-rendering", css)
+        self.assertIn("scroll-behavior: auto", css)
+        # will-change costs a compositing layer, so only a live drag may ask for one.
+        self.assertEqual(css.count("will-change"), 2, "Layer hints belong to the drag and reduced motion only")
+
+        # Icon links are requests: keep the set small and never point at the 2.5 MB
+        # master artwork, which no tab needs.
+        icons = re.findall(r'<link rel="(?:icon|apple-touch-icon|shortcut icon)"[^>]*>', self.html)
+        self.assertLessEqual(len(icons), 5, f"Too many icon links: {len(icons)}")
+        self.assertNotIn("free-app-icon.png", " ".join(icons))
+        self.assertNotIn("icon-512x512.png", " ".join(icons))
+
+        # Everything a first paint must fetch stays small enough for a slow phone.
+        budget = 0
+        for href in re.findall(r'<link rel="(?:stylesheet|icon|apple-touch-icon)" href="([^"]+)"', self.html):
+            budget += (ROOT / href.lstrip("/")).stat().st_size
+        budget += (ROOT / "swipe.js").stat().st_size
+        budget += (ROOT / "counts.js").stat().st_size
+        self.assertLess(budget, 400_000, f"First paint pulls {budget} bytes, which is a lot for this page")
+
+    def test_static_assets_are_cached_on_repeat_visits(self):
+        config = json.loads((ROOT / "vercel.json").read_text(encoding="utf-8"))
+        cache = {}
+        for rule in config["headers"]:
+            for header in rule["headers"]:
+                if header["key"] == "Cache-Control":
+                    cache[rule["source"]] = header["value"]
+        self.assertIn("/(styles\\.css|swipe\\.js|counts\\.js)", cache)
+        self.assertIn("max-age=300", cache["/(styles\\.css|swipe\\.js|counts\\.js)"])
+        assets = cache.get("/(favicon\\.ico|favicon\\.png|apple-touch-icon\\.png|site\\.webmanifest|assets/.*)", "")
+        self.assertIn("max-age=604800", assets, "Icons never need re-fetching on every visit")
+
+        # The 66 MB of source video in the repository must never travel to the CDN.
+        ignore = (ROOT / ".vercelignore").read_text(encoding="utf-8")
+        self.assertIn("Video generation/", ignore)
+        self.assertNotIn("assets/", ignore)
 
     def test_keyboard_and_trackpad_move_between_apps(self):
         js = (ROOT / "swipe.js").read_text(encoding="utf-8")
